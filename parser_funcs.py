@@ -9,7 +9,7 @@ from aditional_functions import notify_users
 from dotenv import load_dotenv
 import os
 import asyncio
-from dbtools import init_db, insert_messages, get_user_keywords
+from dbtools import add_group, init_db, insert_messages, get_user_keywords
 from telethon.tl.functions.channels import GetParticipantRequest
 from telethon.tl.types import ChannelParticipantSelf
 from telethon.errors import (
@@ -60,17 +60,21 @@ async def scanMessages(client, start_date, end_date, curentGroup):
             })
     return messagesArr
 
-async def joinGroupByLink(client, inviteLink):
+async def joinGroupByLink(client, inviteLink, user_id):
     if (inviteLink == 'пропустить'):
         return 'skip'
     else:
         try:
             hash = inviteLink.split('/')[-1][1:]
             print(hash)
-            await client(ImportChatInviteRequest(hash))
+            group = await client(functions.messages.ImportChatInviteRequest(hash))
+            print(group.chats[0].id)
+            await add_group(group.chats[0].id, group.chats[0].title, user_id)
             return True
-        except:
+        except Exception as e:
+            print(e)
             return False
+        
 async def getGroupList(client):
     groups=[]
     dialogs = await client.get_dialogs()
@@ -101,7 +105,10 @@ async def search_group_not_joined(client, group_name):
     me = await client.get_me()
     
     for chat in search_results.chats:
-        if chat.broadcast:
+        try:
+            if chat.broadcast:
+                continue
+        except:
             continue
         try:
             participant = await client(GetParticipantRequest(chat, me))
