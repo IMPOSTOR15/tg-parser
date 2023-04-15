@@ -218,10 +218,6 @@ async def add_group_callback_handler(callback_query: aiogram.types.CallbackQuery
     await bot.send_message(cur_user_id, f"Начал сканированние группы '{selected_group.title}' (ID {selected_group.id})")
 
 
-async def main():
-    asyncio.create_task(clean_db_task())
-    await dp.start_polling()
-
 
 async def main_telegram():
     await client.start()
@@ -244,9 +240,10 @@ async def main():
     # Создаем корутины для каждой из программ
     first_program = main_telegram()
     second_program = main_bot()
-
     # Запускаем корутины совместно с помощью asyncio.gather()
     await asyncio.gather(first_program, second_program)
+    #Запуск очистки дб
+    asyncio.create_task(clean_db_task())
 
 if __name__ == "__main__":
     asyncio.run(main())
