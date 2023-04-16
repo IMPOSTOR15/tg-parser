@@ -1,5 +1,5 @@
 #Импорты тг-парсера и общие импорты
-from telethon import TelegramClient
+from telethon import TelegramClient, errors
 from telethon import functions, types
 from telethon.tl.functions.messages import ImportChatInviteRequest
 from datetime import datetime, timedelta
@@ -18,7 +18,7 @@ from telethon.errors import (
     ChatAdminRequiredError
 )
 
-async def getMessagesTask(client, bot, curentGroup, user_chat_id):
+async def getMessagesTask(client, bot, curentGroup, user_chat_id, task_uid):
     newMessagesList = []
     oldMessagesList = []
     while True:
@@ -127,6 +127,19 @@ async def search_group_not_joined(client, group_name):
     else:
         print(f"Группы с именем {group_name}, в которых вы не состоите, не найдены.")
         return None
+
+#Функция поиска группы по ee id
+async def get_group_by_id(group_id, client):
+    try:
+        input_channel = await client.get_input_entity(group_id)
+    except TypeError as e:
+        print(e)
+        return "ошибка получения чата"
+    try:
+        group = await client.get_entity(input_channel)
+    except errors.ChannelPrivateError:
+        return "Это приватный чат, или бота прогнали"
+    return group
     
 async def getMessagesInTimeDiapazone(client, start_time, end_time, target_group):
     messagesArr = []
