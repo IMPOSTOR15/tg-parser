@@ -1,21 +1,26 @@
-import uuid
-from telethon import TelegramClient, errors
-
-from aditional_functions import clean_db_task
+#Вспомогательные импорты
 from dotenv import load_dotenv
 import os
 import asyncio
+import uuid
+
+#Импорты thelethon парсера
 from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.tl.types import InputPeerChannel
+from telethon import TelegramClient, errors
+
+#Импорты aiogram бота
 import aiogram
 from aiogram import Bot, Dispatcher, types
 
+#Организационные функции
 from dbtools import *
 from parser_funcs import *
+from aditional_functions import *
 
-
-# Импорты и переменные для первой программы
+#Загрузка переменных окружения
 load_dotenv()
+
 #Переменные парсера
 api_id = os.environ.get('API_ID')
 api_hash = os.environ.get('API_HASH')
