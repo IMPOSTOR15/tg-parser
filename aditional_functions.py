@@ -1,5 +1,6 @@
 import asyncio
 from dbtools import clean_db
+from parser_funcs import getMessagesTask
 
 
 async def tasksList():

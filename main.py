@@ -94,7 +94,7 @@ async def process_start_command(message: types.Message):
 async def add_handler(msg: types.Message):
     keywords = msg.get_args().split(' ')
     if not keywords:
-        await msg.reply("Пожалуйста, укажите ключевые слово после команды /add через пробел")
+        await msg.reply("Пожалуйста, укажите ключевые слово после команды /add_keywords через пробел")
     else:
         for keyword in keywords:
             await add_keyword(msg.from_user.id, keyword)
@@ -120,7 +120,7 @@ async def list_handler(msg: types.Message):
     groups = await get_user_group_list(msg.from_user.id)
     print(groups)
     if not groups:
-        await msg.reply("У вас нет добавленных групп. Добавьте их с помощью команды /add_group или .add_group_link")
+        await msg.reply("У вас нет добавленных групп. Добавьте их с помощью команды /add_group_search или .add_group_link")
     else:
         groups_list = ""
         for group in groups:
@@ -189,7 +189,7 @@ async def add_group_callback_handler(callback_query: aiogram.types.CallbackQuery
 async def add_group_link__handler(msg: types.Message):
     grouplink = msg.get_args()
     if not grouplink:
-        await msg.reply("Пожалуйста, укажите ключевое слово после команды /remove.")
+        await msg.reply("Пожалуйста, укажите ключевое слово после команды /remove_keyword.")
     else:
         isJoined = await joinGroupByLink(client, grouplink, msg.from_user.id)
         if (isJoined):
