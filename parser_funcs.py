@@ -18,7 +18,7 @@ from telethon.errors import (
     ChatAdminRequiredError
 )
 
-async def getMessagesTask(client, bot, curentGroup, user_chat_id, task_uid):
+async def getMessagesTask(client, bot, curentGroup, user_chat_id, task_uid, chat_id):
     newMessagesList = []
     oldMessagesList = []
     while True:
@@ -31,7 +31,7 @@ async def getMessagesTask(client, bot, curentGroup, user_chat_id, task_uid):
             newMessages = compareResults(oldMessagesList, newMessagesList)
         if (newMessages != []):
             await insert_messages(newMessages, curentGroup.title)
-            await notify_users(bot, newMessages, user_chat_id)
+            await notify_users(bot, newMessages, chat_id)
             print('Новые сообщения:')
             print(newMessages)
         await asyncio.sleep(5)
@@ -57,17 +57,28 @@ async def scanMessages(client, start_date, end_date, curentGroup):
                 'sender': '@' + sender.username if sender.username else 'N/A',
                 'text': msg.text,
                 'date': msg.date.strftime("%Y-%m-%d %H:%M:%S"),
+                'group': curentGroup.title
             })
     return messagesArr
 
 async def joinGroupByLink(client, inviteLink, user_id):
-    if (inviteLink == 'пропустить'):
+    if inviteLink == 'пропустить':
         return 'skip'
     else:
         try:
-            hash = inviteLink.split('/')[-1][1:]
-            print(hash)
-            group = await client(functions.messages.ImportChatInviteRequest(hash))
+            if "t.me/+" in inviteLink:
+                # Обработка ссылок с хэшем (плюсом)
+                hash = inviteLink.split('/')[-1][1:]
+                group = await client(functions.messages.ImportChatInviteRequest(hash))
+            elif "t.me/" in inviteLink:
+                # Обработка ссылок без хэша (плюса)
+                username = inviteLink.split('/')[-1]
+                result = await client(functions.contacts.ResolveUsernameRequest(username))
+                group = await client(functions.channels.JoinChannelRequest(result.peer))
+            else:
+                # Некорректная ссылка
+                return False
+
             print(group.chats[0].id)
             await add_group(group.chats[0].id, group.chats[0].title, user_id)
             return True

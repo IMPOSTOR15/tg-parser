@@ -1,6 +1,6 @@
 import asyncio
 from dbtools import clean_db
-from parser_funcs import getMessagesTask
+
 
 
 async def tasksList():
@@ -10,10 +10,10 @@ async def tasksList():
         if (task._coro.startswith(getMessagesTask())):
             print(task)
 
-async def notify_users(bot, new_messages, user_chat_id):
+async def notify_users(bot, new_messages, chat_id):
     for message in new_messages:
-        text = f"{message['text']} ({message['date']}) от {message['sender']}"
-        await bot.send_message(user_chat_id, text)
+        text = f"{message['text']} ({message['date']}) от {message['sender']} в группе: {message['group']}"
+        await bot.send_message(chat_id, text)
 
 async def clean_db_task():
     while True:

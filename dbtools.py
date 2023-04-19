@@ -130,8 +130,7 @@ async def get_all_group_list():
         group_list = await cursor.fetchall()
         return group_list
     
-#Удаление группы из БД
-async def remove_group(add_by_userid, group_name):
+async def remove_group(add_by_userid, group_id):
     async with aiosqlite.connect("db.db") as db:
-        await db.execute("DELETE FROM groups WHERE add_by_userid=? AND group_name=?", (add_by_userid, group_name))
+        await db.execute("DELETE FROM groups WHERE add_by_userid=? AND group_id=?", (add_by_userid, group_id))
         await db.commit()
