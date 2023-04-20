@@ -342,13 +342,13 @@ async def join_group_by_link_handler(query: CallbackQuery):
 @dp.message_handler(lambda message: message.text and message.from_user.id in user_data and user_data[message.from_user.id] == "join_group_by_link")
 async def process_group_links(message: types.Message):
     links = message.text.split(', ')
-
+    
     success_count = 0
     errors = []
 
     for link in links:
         link = link.strip()
-        is_joined = await joinGroupByLink(client, link, message.from_user.id)
+        is_joined = await joinGroupByLink(client, link, message.from_user.id, bot, message.chat.id)
         if is_joined:
             success_count += 1
         else:

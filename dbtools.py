@@ -125,7 +125,7 @@ async def add_group(group_id, group_name, add_by_userid):
 #Получение списка групп конкретного пользователя из бд
 async def get_user_group_list(user_id):
     async with aiosqlite.connect("db.db") as db:
-        cursor = await db.execute("SELECT group_id, group_name FROM groups WHERE add_by_userid = ?", (user_id,))
+        cursor = await db.execute("SELECT group_id, group_name, add_by_userid FROM groups WHERE add_by_userid = ?", (user_id,))
         group_list = await cursor.fetchall()
         return group_list
     
