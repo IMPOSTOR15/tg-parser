@@ -9,7 +9,6 @@ from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.tl.types import InputPeerChannel
 from telethon import TelegramClient, errors
 
-
 #Импорты aiogram бота
 import aiogram
 from aiogram import Bot, Dispatcher, types
@@ -24,11 +23,11 @@ from aiogram.dispatcher.filters import Text
 from aiogram.types import ParseMode
 from aiogram.utils.markdown import text, quote_html
 
-
 #Организационные функции
 from dbtools import *
 from parser_funcs import *
 from aditional_functions import *
+from marckups import *
 
 #Загрузка переменных окружения
 load_dotenv()
@@ -80,54 +79,7 @@ async def cmd_start(message: types.Message):
 
 #Обработчик команды для получения списка команд
 menu_cd = CallbackData("menu", "action")
-async def back_button():
-    return InlineKeyboardButton("Назад", callback_data=menu_cd.new(action="back"))
-async def keywords_keyboard():
-    keyboard = InlineKeyboardMarkup()
-    list_button = InlineKeyboardButton("Список", callback_data=menu_cd.new(action="list_keywords"))
-    add_button = InlineKeyboardButton("Добавить", callback_data=menu_cd.new(action="add_keywords"))
-    delete_button = InlineKeyboardButton("Удалить", callback_data=menu_cd.new(action="remove_keywords"))
-    keyboard.add(list_button, add_button, delete_button)
-    keyboard.add(await back_button())
-    return keyboard
 
-async def groups_keyboard():
-    keyboard = InlineKeyboardMarkup(row_width=2)
-    list_button = InlineKeyboardButton("Список", callback_data=menu_cd.new(action="list_groups"))
-    search_button = InlineKeyboardButton("Поиск новой", callback_data=menu_cd.new(action="join_group_by_search"))
-    join_button = InlineKeyboardButton("Присоединиться по ссылке", callback_data=menu_cd.new(action="join_group_by_link"))
-    remove_button = InlineKeyboardButton("Удалить", callback_data=menu_cd.new(action="remove_groups"))
-    back_btn = await back_button() 
-    keyboard.add(list_button, search_button, join_button, remove_button)
-    keyboard.row(back_btn)  
-    return keyboard
-
-async def scan_keyboard():
-    keyboard = InlineKeyboardMarkup()
-    selective_button = InlineKeyboardButton("Выборочное", callback_data=menu_cd.new(action="selective_scan"))
-    scan_all_button = InlineKeyboardButton("Сканировать все", callback_data=menu_cd.new(action="scan_all"))
-    stop_selective_button = InlineKeyboardButton("Остановить выборочно", callback_data=menu_cd.new(action="stop_selective"))
-    stop_all_button = InlineKeyboardButton("Остановить все", callback_data=menu_cd.new(action="stop_all"))
-    keyboard.add(selective_button, scan_all_button)
-    keyboard.add(stop_selective_button, stop_all_button)
-    keyboard.add(await back_button())
-    return keyboard
-
-async def users_keyboard():
-    keyboard = InlineKeyboardMarkup()
-    create_user_button = InlineKeyboardButton("Создать пользователя", callback_data=menu_cd.new(action="create_user"))
-    keyboard.add(create_user_button)
-    keyboard.add(await back_button())
-    return keyboard
-
-async def help_keyboard():
-    keyboard = InlineKeyboardMarkup()
-    keywords_button = InlineKeyboardButton("Ключевики", callback_data=menu_cd.new(action="keywords"))
-    groups_button = InlineKeyboardButton("Группы", callback_data=menu_cd.new(action="groups"))
-    scan_button = InlineKeyboardButton("Сканирование", callback_data=menu_cd.new(action="scan"))
-    users_button = InlineKeyboardButton("Пользователи", callback_data=menu_cd.new(action="users"))
-    keyboard.add(keywords_button, groups_button, scan_button, users_button)
-    return keyboard
 
 @dp.callback_query_handler(menu_cd.filter(action="keywords"))
 async def show_keywords_menu(query: CallbackQuery):
@@ -156,6 +108,7 @@ async def show_users_menu(query: CallbackQuery):
     keyboard = await users_keyboard()
     await query.message.edit_text(text, reply_markup=keyboard)
     await query.answer()
+
 @dp.callback_query_handler(menu_cd.filter(action="back"))
 async def back_to_main_menu(query: CallbackQuery):
     user_id = query.from_user.id
@@ -186,16 +139,12 @@ async def user_exists(user_id, user_chat_id):
 async def process_start_command(message: types.Message):
     user_id = message.from_user.id
     chat_id = message.chat.id
-    user_name = message.from_user.full_name
 
     if await user_exists(user_id, chat_id):
         await bot.send_message(chat_id, "Вы уже добавлены в список пользователей.")
         return
 
-    keyboard = InlineKeyboardMarkup()
-    keyboard.add(InlineKeyboardButton("Да", callback_data="add_user"))
-    keyboard.add(InlineKeyboardButton("Нет", callback_data="cancel_add_user"))
-
+    keyboard = InlineKeyboardMarkup().add(InlineKeyboardButton("Да", callback_data="add_user")).add(InlineKeyboardButton("Нет", callback_data="cancel_add_user"))
     await bot.send_message(chat_id, "Хотите добавить себя в список пользователей?", reply_markup=keyboard)
 
 @dp.callback_query_handler(lambda c: c.data in ['add_user', 'cancel_add_user'])
@@ -463,53 +412,80 @@ async def process_group_ids_to_remove(message: types.Message):
     result_message = "\n".join(filter(bool, [removed_message, invalid_message]))
 
     await message.reply(result_message)
+
 #Обработчик команды запуска сканирования
-@dp.message_handler(commands=['start_scan'])
-async def add_start_scan__handler(msg: types.Message):
-    user_id = msg.from_user.id
+@dp.callback_query_handler(menu_cd.filter(action="selective_scan"))
+async def add_start_scan__handler(query: CallbackQuery):
+    user_id = query.from_user.id
     groupList = await get_user_group_list(user_id)
+    global groupArr
     groupArr = []
+
     for group in groupList:
         groupArr.append({'chat_id': group[0], 'chat_name': group[1]})
-    
-    buttons = []
-    for group in groupArr:
-        buttons.append(aiogram.types.InlineKeyboardButton(text=group['chat_name'], callback_data=f"start_scan_{group['chat_id']}"))
-    markup = aiogram.types.InlineKeyboardMarkup(row_width=1)
-    markup.add(*buttons)
-    await msg.reply(f"Выберите нужную группу для старта сканирования из списка ниже:", reply_markup=markup)
+
+    if (len(groupArr) > 0):
+        buttons = []
+        buttons.append(aiogram.types.InlineKeyboardButton(text="Запустить все", callback_data=f"start_scan_all"))
+        for group in groupArr:
+            buttons.append(aiogram.types.InlineKeyboardButton(text=group['chat_name'], callback_data=f"start_scan_{group['chat_id']}"))
+        markup = aiogram.types.InlineKeyboardMarkup(row_width=1)
+        markup.add(*buttons)
+        markup.add(back_button())
+
+        await query.message.edit_text(f"Выберите нужную группу для старта сканирования из списка ниже:", reply_markup=markup)
+    else:
+        await query.message.edit_text(f"У вас нет добавленных групп", reply_markup=markup)
 
 #Отработчик кнопки старта задачи на сканирование
 @dp.callback_query_handler(lambda callback_query: callback_query.data.startswith('start_scan_'))
 async def add_group_callback_handler(callback_query: aiogram.types.CallbackQuery):
     callback_data = callback_query.data
     chat_id = callback_query.message.chat.id
-    group_id = int(callback_data.split('_')[2])
-    selected_group = await get_group_by_id(group_id, client)
-    #Получаем id текущего чата
-    cur_user_id = callback_query.from_user.id
-    # Запуск сканирования
-    task_uid = str(uuid.uuid4())
-    task = asyncio.create_task(getMessagesTask(client, bot, selected_group, cur_user_id, task_uid, chat_id))
-    going_tasks[task_uid] = {"task": task,"by_user": cur_user_id, "scan_group": selected_group.title}
+    group_id = callback_data.split('_')[2]
 
-    await bot.send_message(chat_id, f"Начал сканированние группы '{selected_group.title}' (ID {selected_group.id}) \n Id отслеживания: {task_uid}")
+    markup = aiogram.types.InlineKeyboardMarkup(row_width=1)
+    markup.add(back_button())
+    
+    if (group_id == "all"):
+        msg_text = "Запущенно сканирование следующих групп:"
+        for group in groupArr:
+            selected_group = await get_group_by_id(int(group['chat_id']), client)
+            cur_user_id = callback_query.from_user.id
+            task_uid = str(uuid.uuid4())
+            task = asyncio.create_task(getMessagesTask(client, bot, selected_group, cur_user_id, task_uid, chat_id))
+            going_tasks[task_uid] = {"task": task,"by_user": cur_user_id, "scan_group": selected_group.title}
+            msg_text += f"\n{selected_group.title}' (ID {selected_group.id})"
+            await callback_query.message.edit_text(msg_text, reply_markup=markup)
+    else:
+        
+        selected_group = await get_group_by_id(int(group_id), client)
+        #Получаем id текущего чата
+        cur_user_id = callback_query.from_user.id
+        # Запуск сканирования
+        task_uid = str(uuid.uuid4())
+        task = asyncio.create_task(getMessagesTask(client, bot, selected_group, cur_user_id, task_uid, chat_id))
+        going_tasks[task_uid] = {"task": task,"by_user": cur_user_id, "scan_group": selected_group.title}
+        await callback_query.message.edit_text(f"Начал сканированние группы '{selected_group.title}' (ID {selected_group.id}) \n Id отслеживания: {task_uid}", reply_markup=markup)
+    # await bot.send_message(chat_id, f"Начал сканированние группы '{selected_group.title}' (ID {selected_group.id}) \n Id отслеживания: {task_uid}")
 
 #Обработчик команды остановки сканирования
-@dp.message_handler(commands=['stop_scan'])
-async def add_stop_scan__handler(msg: types.Message):
-    user_id = msg.from_user.id
-    chat_id = msg.chat.id
+
+@dp.callback_query_handler(menu_cd.filter(action="selective_stop"))
+async def add_stop_scan__handler(query: CallbackQuery):
+    user_id = query.from_user.id
     markup = aiogram.types.InlineKeyboardMarkup()
-    for task_uid, task_info in going_tasks.items():
-        if task_info['by_user'] == user_id:
-            button_text = f"{task_info['scan_group']} ({task_uid})"
-            callback_data = f"cancel_task_{task_uid}"
-            markup.add(aiogram.types.InlineKeyboardButton(text=button_text, callback_data=callback_data))
-    if markup.inline_keyboard:
-        await bot.send_message(chat_id=chat_id, text="Выберите задачу для остановки:", reply_markup=markup)
+    if (len(going_tasks) > 0):
+        markup.add(aiogram.types.InlineKeyboardButton(text="Остановить все", callback_data="cancel_task_all"))
+        for task_uid, task_info in going_tasks.items():
+            if task_info['by_user'] == user_id:
+                button_text = f"{task_info['scan_group']} ({task_uid})"
+                callback_data = f"cancel_task_{task_uid}"
+                markup.add(aiogram.types.InlineKeyboardButton(text=button_text, callback_data=callback_data))
+        markup.add(back_button())
+        await query.message.edit_text(text="Выберите задачу для остановки:", reply_markup=markup)
     else:
-        await bot.send_message(chat_id=chat_id, text="У вас нет активных задач.")
+        await query.message.edit_text(text="У вас нет активных задач.", reply_markup = await back_keyboard())
 
 #Обработчик кнопки отмены задачи на сканирование
 @dp.callback_query_handler(lambda callback_query: callback_query.data.startswith('cancel_task_'))
@@ -517,11 +493,19 @@ async def add_stop_scan_callback_handler(callback_query: aiogram.types.CallbackQ
     chat_id = callback_query.message.chat.id
     callback_data = callback_query.data
     task_id = callback_data.split('_')[2]
-    task_name = going_tasks[task_id]['scan_group']
-    task_entity = going_tasks[task_id]['task']
-    task_entity.cancel()
-    del going_tasks[task_id]
-    await bot.send_message(chat_id=chat_id, text=f"Задача сканирования группы '{task_name}' остановленна.")
+    if(task_id == "all"):
+        for key, value in going_tasks.items():
+            task_name = going_tasks[key]['scan_group']
+            task_entity = going_tasks[key]['task']
+            task_entity.cancel()
+        going_tasks.clear()
+        await callback_query.message.edit_text(text=f"Все задачи остановленны", reply_markup = await back_keyboard())
+    else:
+        task_name = going_tasks[task_id]['scan_group']
+        task_entity = going_tasks[task_id]['task']
+        task_entity.cancel()
+        del going_tasks[task_id]
+        await callback_query.message.edit_text(text=f"Задача сканирования группы '{task_name}' остановленна.", reply_markup = await back_keyboard())
 
 
 #Обработчик получения команды без обработчика

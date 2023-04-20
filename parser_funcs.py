@@ -34,7 +34,7 @@ async def getMessagesTask(client, bot, curentGroup, user_chat_id, task_uid, chat
             await notify_users(bot, newMessages, chat_id)
             print('Новые сообщения:')
             print(newMessages)
-        await asyncio.sleep(5)
+        await asyncio.sleep(60)
 
 def compareResults(prevMessageArr, newMessagesArr):
     addedMessages = []
