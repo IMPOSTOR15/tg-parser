@@ -70,10 +70,15 @@ async def read_messages_from_db():
         return messages
     
 #Запросы ключевых слов
-async def add_keyword(user_id, keyword):
+async def add_keyword(user_id: int, keyword: str) -> bool:
     async with aiosqlite.connect("db.db") as db:
-        await db.execute("INSERT INTO keywords (user_id, keyword) VALUES (?, ?)", (user_id, keyword))
-        await db.commit()
+        try:
+            await db.execute("INSERT INTO keywords (user_id, keyword) VALUES (?, ?)", (user_id, keyword))
+            await db.commit()
+            return True
+        except Exception as e:
+            print(e)
+            return False
 
 #Получение из бд ключевых слов конкретного пользователя
 async def get_user_keywords(user_id):
@@ -88,8 +93,9 @@ async def get_user_keywords(user_id):
 #Удаление ключевого слова пользователя
 async def remove_keyword(user_id, keyword):
     async with aiosqlite.connect("db.db") as db:
-        await db.execute("DELETE FROM keywords WHERE user_id=? AND keyword=?", (user_id, keyword))
+        cursor = await db.execute("DELETE FROM keywords WHERE user_id=? AND keyword=?", (user_id, keyword))
         await db.commit()
+        return cursor.rowcount > 0
 
 #Запросы пользователей
 async def add_user(user_id, user_name, user_chat_id):

@@ -84,9 +84,9 @@ async def back_button():
     return InlineKeyboardButton("Назад", callback_data=menu_cd.new(action="back"))
 async def keywords_keyboard():
     keyboard = InlineKeyboardMarkup()
-    list_button = InlineKeyboardButton("Список", callback_data=menu_cd.new(action="list"))
-    add_button = InlineKeyboardButton("Добавить", callback_data=menu_cd.new(action="add"))
-    delete_button = InlineKeyboardButton("Удалить", callback_data=menu_cd.new(action="delete"))
+    list_button = InlineKeyboardButton("Список", callback_data=menu_cd.new(action="list_keywords"))
+    add_button = InlineKeyboardButton("Добавить", callback_data=menu_cd.new(action="add_keywords"))
+    delete_button = InlineKeyboardButton("Удалить", callback_data=menu_cd.new(action="remove_keywords"))
     keyboard.add(list_button, add_button, delete_button)
     keyboard.add(await back_button())
     return keyboard
@@ -97,9 +97,9 @@ async def groups_keyboard():
     search_button = InlineKeyboardButton("Поиск новой", callback_data=menu_cd.new(action="join_group_by_search"))
     join_button = InlineKeyboardButton("Присоединиться по ссылке", callback_data=menu_cd.new(action="join_group_by_link"))
     remove_button = InlineKeyboardButton("Удалить", callback_data=menu_cd.new(action="remove_groups"))
-    back_btn = await back_button()  # Измените имя переменной здесь
+    back_btn = await back_button() 
     keyboard.add(list_button, search_button, join_button, remove_button)
-    keyboard.row(back_btn)  # И здесь
+    keyboard.row(back_btn)  
     return keyboard
 
 async def scan_keyboard():
@@ -158,6 +158,10 @@ async def show_users_menu(query: CallbackQuery):
     await query.answer()
 @dp.callback_query_handler(menu_cd.filter(action="back"))
 async def back_to_main_menu(query: CallbackQuery):
+    user_id = query.from_user.id
+    if user_id in user_data:
+        del user_data[user_id]
+
     text = "Меню взаимодействия"
     keyboard = await help_keyboard()
     await query.message.edit_text(text, reply_markup=keyboard)
@@ -209,37 +213,67 @@ async def process_inline_answer(callback_query: aiogram.types.CallbackQuery):
     await bot.answer_callback_query(callback_query.id)
 
 #Обработчик команды добавления ключевого слова
-@dp.callback_query_handler(lambda c: c.data == 'add_keywords')
-async def add_handler_callback(query: aiogram.types.CallbackQuery):
-    keywords = query.message.get_args().split(', ')
-    if not keywords:
-        await query.message.reply("Пожалуйста, укажите ключевые слова или фразы после команды /add_keywords через запятую")
-    else:
-        for keyword in keywords:
-            await add_keyword(msg.from_user.id, keyword)
-        if (len(keywords) == 1):
-            await query.message.reply(f"Ключевое слово '{keywords[0]}' добавлено")
+@dp.callback_query_handler(menu_cd.filter(action="add_keywords"))
+async def add_keywords_handler(query: CallbackQuery):
+    await query.answer()
+    user_data[query.from_user.id] = "add_keywords"
+    print(user_data)
+    await bot.send_message(chat_id=query.message.chat.id, text="Введите ключевое слово или фразу, которое необходимо добавить, если их несколько разделите запятыми")
+
+@dp.message_handler(lambda message: message.text and message.from_user.id in user_data and user_data[message.from_user.id] == "add_keywords")
+async def add_keywords(msg: types.Message):
+    keywords = msg.text.split(', ')
+
+    added_keywords = []
+    failed_keywords = []
+
+    for keyword in keywords:
+        keyword = keyword.strip()
+        if await add_keyword(msg.from_user.id, keyword):
+            added_keywords.append(keyword)
         else:
-            await query.message.reply(f"Ключевые слова '{ ', '.join(keywords) }' добавлены")
+            failed_keywords.append(keyword)
+
+    added_message = f"Ключевые слова добавлены: {', '.join(added_keywords)}" if added_keywords else ""
+    failed_message = f"Не удалось добавить ключевые слова: {', '.join(failed_keywords)}" if failed_keywords else ""
+
+    result_message = "\n".join(filter(bool, [added_message, failed_message]))
+
+    await msg.reply(result_message)
+
+    # Очистка user_data для текущего пользователя
+    del user_data[msg.from_user.id]
 
 #Обработчик команды вывода списка ключевых слов
-@dp.message_handler(commands=['list_keywords'])
-async def list_handler(msg: types.Message):
-    keywords = await get_user_keywords(msg.from_user.id)
-    print(keywords)
+@dp.callback_query_handler(menu_cd.filter(action="list_keywords"))
+async def list_keywords_handler(query: CallbackQuery):
+    await query.answer()
+    user_data[query.from_user.id] = "list_keywords"
+    keywords = await get_user_keywords(query.from_user.id)
+
     if not keywords:
-        await msg.reply("У вас нет ключевых слов. Добавьте их с помощью команды /add_keywords")
+        text = "У вас нет ключевых слов. Добавьте их с помощью команды /add_keywords"
     else:
         keyword_list = "\n".join(keywords)
-        await msg.reply(f"Ваши ключевые слова:\n{keyword_list}")
+        text = f"Ваши ключевые слова:\n{keyword_list}"
 
+    # Создаем клавиатуру с кнопкой "Назад"
+    back_markup = InlineKeyboardMarkup().add(InlineKeyboardButton("Назад", callback_data=menu_cd.new(action="back_list_keywords")))
+    await query.message.edit_text(text, reply_markup=back_markup)
+    await query.answer()
+@dp.callback_query_handler(menu_cd.filter(action="back_list_keywords"))
+async def back_to_groups_menu(query: CallbackQuery):
+    text = "Меню взаимодействия с ключевыми словами"
+    keyboard = await keywords_keyboard()
+    await query.message.edit_text(text, reply_markup=keyboard)
+    await query.answer()
 #Обработчик команды вывода списка текущих групп пользователя
 @dp.callback_query_handler(menu_cd.filter(action="list_groups"))
 async def list_handler(query: CallbackQuery):
     groups = await get_user_group_list(query.from_user.id)
     print(groups)
     if not groups:
-        text = "У вас нет добавленных групп. Добавьте их с помощью команды /add_group_search или .add_group_link"
+        text = "У вас нет добавленных групп."
     else:
         groups_list = ""
         for group in groups:
@@ -257,14 +291,35 @@ async def back_to_groups_menu(query: CallbackQuery):
     await query.answer()
 
 #Обработчик команды удаления ключевого слова
-@dp.message_handler(commands=['remove_keyword'])
+@dp.callback_query_handler(menu_cd.filter(action="remove_keywords"))
+async def remove_keywords_handler(query: CallbackQuery):
+    await query.answer()
+    user_data[query.from_user.id] = "remove_keywords"
+    await bot.send_message(chat_id=query.message.chat.id, text="Введите ключевое слово, которое необходимо удалить, если их несколько разделите запятыми")
+
+@dp.message_handler(lambda message: message.text and message.from_user.id in user_data and user_data[message.from_user.id] == "remove_keywords")
 async def remove_handler(msg: types.Message):
-    keyword = msg.get_args()
-    if not keyword:
-        await msg.reply("Пожалуйста, укажите ключевое слово после команды /remove_keyword")
-    else:
-        await remove_keyword(msg.from_user.id, keyword)
-        await msg.reply(f"Ключевое слово '{keyword}' удалено.")
+    keywords = msg.text.split(', ')
+
+    removed_keywords = []
+    failed_keywords = []
+
+    for keyword in keywords:
+        keyword = keyword.strip()
+        if await remove_keyword(msg.from_user.id, keyword):
+            removed_keywords.append(keyword)
+        else:
+            failed_keywords.append(keyword)
+
+    removed_message = f"Ключевые слова удалены: {', '.join(removed_keywords)}" if removed_keywords else ""
+    failed_message = f"Не удалось удалить ключевые слова: {', '.join(failed_keywords)}" if failed_keywords else ""
+
+    result_message = "\n".join(filter(bool, [removed_message, failed_message]))
+
+    await msg.reply(result_message)
+
+    # Очистка user_data для текущего пользователя
+    del user_data[msg.from_user.id]
 
 #Обработчик команды добавления в группу через поиск
 @dp.callback_query_handler(menu_cd.filter(action="join_group_by_search"))
