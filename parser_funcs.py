@@ -51,7 +51,7 @@ async def scanMessages(client, start_date, end_date, curentGroup):
 
     for msg in messagesInPeriod:
         # Проверяем, что текст сообщения существует и проверяем наличие ключевых слов
-        if msg.text and any(keyword in msg.text for keyword in keywords):
+        if msg.text and any(keyword.lower() in msg.text.lower() for keyword in keywords):
             sender = await msg.get_sender()
             messagesArr.append({
                 'sender': '@' + sender.username if sender.username else 'N/A',
@@ -61,11 +61,13 @@ async def scanMessages(client, start_date, end_date, curentGroup):
             })
     return messagesArr
 
+
 async def joinGroupByLink(client, inviteLink, user_id):
     if inviteLink == 'пропустить':
         return 'skip'
     else:
         try:
+            await asyncio.sleep(20)
             if "t.me/+" in inviteLink:
                 # Обработка ссылок с хэшем (плюсом)
                 hash = inviteLink.split('/')[-1][1:]
