@@ -135,10 +135,10 @@ async def user_exists(user_id, user_chat_id):
             return True
     return False
 
-@dp.message_handler(commands=['create_user'])
-async def process_start_command(message: types.Message):
-    user_id = message.from_user.id
-    chat_id = message.chat.id
+@dp.callback_query_handler(menu_cd.filter(action="create_user"))
+async def process_start_command(query: CallbackQuery):
+    user_id = query.message.from_user.id
+    chat_id = query.message.chat.id
 
     if await user_exists(user_id, chat_id):
         await bot.send_message(chat_id, "Вы уже добавлены в список пользователей.")
