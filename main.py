@@ -135,10 +135,10 @@ async def user_exists(user_id, user_chat_id):
             return True
     return False
 
-@dp.callback_query_handler(menu_cd.filter(action="create_user"))
-async def process_start_command(query: CallbackQuery):
-    user_id = query.message.from_user.id
-    chat_id = query.message.chat.id
+@dp.message_handler(commands=['create_user'])
+async def process_start_command(message: types.Message):
+    user_id = message.from_user.id
+    chat_id = message.chat.id
 
     if await user_exists(user_id, chat_id):
         await bot.send_message(chat_id, "Вы уже добавлены в список пользователей.")
@@ -348,7 +348,10 @@ async def process_group_links(message: types.Message):
 
     for link in links:
         link = link.strip()
-        is_joined = await joinGroupByLink(client, link, message.from_user.id, bot, message.chat.id)
+        try:
+            is_joined = await joinGroupByLink(client, link, message.from_user.id, bot, message.chat.id)
+        except Exception as e:
+            continue
         if is_joined:
             success_count += 1
         else:

@@ -68,41 +68,31 @@ async def joinGroupByLink(client, inviteLink, user_id, bot, chat_id):
     else:
         try:
             entity = await client.get_entity(inviteLink)
-            if (is_member_of_group(client, entity.title)):
+            if (await is_member_of_group(client, entity.title)):
                 await bot.send_message(chat_id=chat_id, text=f"Бот уже является членом группы '{entity.title}'")
                 cur_group_list = await get_user_group_list(user_id)
-                if (f"{entity.id}",f"{entity.title}",f"{user_id}" in cur_group_list):
-                    return True
-                else:
+                if (f"{entity.id}",f"{entity.title}",f"{user_id}" not in cur_group_list):
                     await add_group(entity.id, entity.title, user_id)
-                    return True
-            print("-----entity-----")
-            print(entity.title)
-            print("-----------------")
+                return True
             await asyncio.sleep(5)
             print("-------Попытка присоединения--------")
             if "t.me/+" in inviteLink:
                 # Обработка ссылок с хэшем (плюсом)
                 hash = inviteLink.split('/')[-1][1:]
                 group = await client(functions.messages.ImportChatInviteRequest(hash))
-                is_member_of_group(client, group_title)
-                print("---------------------------------")
                 print("-----------Присоединился---------")
             elif "t.me/" in inviteLink:
                 # Обработка ссылок без хэша (плюса)
                 username = inviteLink.split('/')[-1]
                 result = await client(functions.contacts.ResolveUsernameRequest(username))
                 group = await client(functions.channels.JoinChannelRequest(result.peer))
-                print("---------------------------------")
                 print("-----------Присоединился---------")
             else:
                 # Некорректная ссылка
-                print("---------------------------------")
                 print("-----------Не присоединился------")
                 return False
             print("---------------Id-ЧАТА------------------")
             print(group.chats[0].id)
-            print("---------------------------------")
             await add_group(group.chats[0].id, group.chats[0].title, user_id)
             await bot.send_message(chat_id=chat_id, text=f"Присединился к группе {group.chats[0].title}, ожидайте")
             return True
@@ -110,7 +100,6 @@ async def joinGroupByLink(client, inviteLink, user_id, bot, chat_id):
             print("---------------------Ошибка-----------------")
             await bot.send_message(chat_id=chat_id, text=f"Ошибка: {e.args}")
             print(e.args)
-            print("------------------Конец ошибки---------------")
             # await bot.send_message(chat_id=chat_id, text=f"Привышен лимит на присоединенние к группам, до нового присоединения осталось: {int(e.message.split(' ')[3]) + 1}")
             await asyncio.sleep(int(e.message.split(' ')[3]) + 1)
             
