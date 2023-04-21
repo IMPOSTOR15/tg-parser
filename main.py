@@ -336,7 +336,7 @@ async def add_group_handler(msg: types.Message):
 async def join_group_by_link_handler(query: CallbackQuery):
     await query.answer()
     user_data[query.from_user.id] = "join_group_by_link"
-    await bot.send_message(chat_id=query.message.chat.id, text="Пришлите ссылку, если ссылок несколько, разделите их запятыми.")
+    await bot.send_message(chat_id=query.message.chat.id, text="Пришлите ссылку, если ссылок несколько, разделите их запятыми. (Не стоит пытаться использовать более пяти ссылок чаще чем в 5-30 минут)")
 
 # Обработчик присоединения к группам по ссылкам
 @dp.message_handler(lambda message: message.text and message.from_user.id in user_data and user_data[message.from_user.id] == "join_group_by_link")

@@ -71,8 +71,9 @@ async def joinGroupByLink(client, inviteLink, user_id, bot, chat_id):
             if (await is_member_of_group(client, entity.title)):
                 await bot.send_message(chat_id=chat_id, text=f"Бот уже является членом группы '{entity.title}'")
                 cur_group_list = await get_user_group_list(user_id)
-                if (f"{entity.id}",f"{entity.title}",f"{user_id}" not in cur_group_list):
+                if ((f"{entity.id}",f"{entity.title}",f"{user_id}") not in cur_group_list):
                     await add_group(entity.id, entity.title, user_id)
+                    print("Запись группы в бд")
                 return True
             await asyncio.sleep(5)
             print("-------Попытка присоединения--------")
