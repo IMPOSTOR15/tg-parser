@@ -452,14 +452,22 @@ async def add_group_callback_handler(callback_query: aiogram.types.CallbackQuery
     
     if (group_id == "all"):
         msg_text = "Запущенно сканирование следующих групп:"
+        await callback_query.message.edit_text("Ожидайте....")
+        
         for group in groupArr:
             selected_group = await get_group_by_id(int(group['chat_id']), client)
+            if (selected_group == 'Это приватный чат, или бота прогнали'):
+                await bot.send_message(chat_id=chat_id, text=f"Возможно бота прогнали из группы {group['chat_name']} {group['chat_id']}")
+                continue
             cur_user_id = callback_query.from_user.id
             task_uid = str(uuid.uuid4())
-            task = asyncio.create_task(getMessagesTask(client, bot, selected_group, cur_user_id, task_uid, chat_id))
-            going_tasks[task_uid] = {"task": task,"by_user": cur_user_id, "scan_group": selected_group.title}
-            msg_text += f"\n{selected_group.title}' (ID {selected_group.id})"
-            await callback_query.message.edit_text(msg_text, reply_markup=markup)
+            
+            
+            # msg_text += f"\n{selected_group.title}' (ID {selected_group.id})"
+        task = asyncio.create_task(getMessagesTask(client, bot, selected_group, cur_user_id, task_uid, chat_id, groupArr))
+        going_tasks[task_uid] = {"task": task,"by_user": cur_user_id, "scan_group": selected_group.title}
+        await callback_query.message.edit_text("Сканированние всех групп запущенно")
+        # await callback_query.message.edit_text(msg_text, reply_markup=markup)
     else:
         
         selected_group = await get_group_by_id(int(group_id), client)
@@ -467,7 +475,7 @@ async def add_group_callback_handler(callback_query: aiogram.types.CallbackQuery
         cur_user_id = callback_query.from_user.id
         # Запуск сканирования
         task_uid = str(uuid.uuid4())
-        task = asyncio.create_task(getMessagesTask(client, bot, selected_group, cur_user_id, task_uid, chat_id))
+        task = asyncio.create_task(getMessagesTask(client, bot, selected_group, cur_user_id, task_uid, chat_id, groupArr))
         going_tasks[task_uid] = {"task": task,"by_user": cur_user_id, "scan_group": selected_group.title}
         await callback_query.message.edit_text(f"Начал сканированние группы '{selected_group.title}' (ID {selected_group.id}) \n Id отслеживания: {task_uid}", reply_markup=markup)
     # await bot.send_message(chat_id, f"Начал сканированние группы '{selected_group.title}' (ID {selected_group.id}) \n Id отслеживания: {task_uid}")
@@ -527,7 +535,7 @@ async def main_telegram():
 
     while True:
         print("working....")
-        await asyncio.sleep(50)
+        await asyncio.sleep(120)
 
 #Функция запуска телеграм-бота
 async def main_bot():

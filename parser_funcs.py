@@ -1,6 +1,8 @@
 #Импорты тг-парсера и общие импорты
+import telethon
 from telethon import TelegramClient, errors
 from telethon import functions, types
+
 from telethon.tl.functions.messages import ImportChatInviteRequest
 from datetime import timedelta
 import datetime
@@ -18,49 +20,79 @@ from telethon.errors import (
 from telethon.tl.functions.channels import GetFullChannelRequest, GetParticipantsRequest
 from telethon.tl.types import InputPeerChannel
 from dbtools import *
+from telethon.tl.types import PeerUser, PeerChat, PeerChannel
 
 
+async def getMessagesTask(client, bot, curentGroup, user_id, task_uid, chat_id, groupArr):
 
-async def getMessagesTask(client, bot, curentGroup, user_id, task_uid, chat_id):
-    print(f"getMessagesTask started for group: {curentGroup.title}")
+    print(f"getMessagesTask started for group: {groupArr}")
     newMessagesList = []
     oldMessagesList = []
-    while True:
-        try:
-            end_date = dt.now(pytz.utc)
-            start_date = dt.now(pytz.utc) - timedelta(hours=1)
-            oldMessagesList = newMessagesList
-            newMessagesList = await scanMessages(client, start_date, end_date, curentGroup, user_id)
-            newMessages = []
-            if(oldMessagesList != []):
-                newMessages = compareResults(oldMessagesList, newMessagesList)
-            if (newMessages != []):
-                await insert_messages(newMessages, curentGroup.title)
-                await notify_users(bot, newMessages, chat_id)
-                print('Новые сообщения:')
-                print(newMessages)
-            await asyncio.sleep(60)
-        except Exception as e:
-            print(e)
+    for group in groupArr:
+        curentGroup = await get_group_by_id(int(group['chat_id']), client)
+        if (curentGroup == 'Это приватный чат, или бота прогнали'):
+            await bot.send_message(chat_id=chat_id, text=f"Возможно бота прогнали из группы {group['chat_name']} {group['chat_id']}")
+            continue
+        end_date = dt.now(pytz.utc)
+        start_date = dt.now(pytz.utc) - timedelta(hours=1)
+        oldMessagesList = newMessagesList
+        newMessagesList = await scanMessages(client, start_date, end_date, curentGroup, user_id)
+        newMessages = []
+        print(f'Отсканированна группа {curentGroup.title}')
+        if(oldMessagesList != []):
+            newMessages = compareResults(oldMessagesList, newMessagesList)
+        if (newMessages != []):
+            await insert_messages(newMessages, curentGroup.title)
+            await notify_users(bot, newMessages, chat_id)
+            print('Новые сообщения:')
+            print(newMessages)
+    # while True:
+    #     try:
+    #         end_date = dt.now(pytz.utc)
+    #         start_date = dt.now(pytz.utc) - timedelta(hours=1)
+    #         oldMessagesList = newMessagesList
+    #         newMessagesList = await scanMessages(client, start_date, end_date, curentGroup, user_id)
+    #         newMessages = []
+    #         if(oldMessagesList != []):
+    #             newMessages = compareResults(oldMessagesList, newMessagesList)
+    #         if (newMessages != []):
+    #             await insert_messages(newMessages, curentGroup.title)
+    #             await notify_users(bot, newMessages, chat_id)
+    #             print('Новые сообщения:')
+    #             print(newMessages)
+    #         await asyncio.sleep(300)
+    #     except Exception as e:
+    #         print(e)
 
 def compareResults(prevMessageArr, newMessagesArr):
     addedMessages = []
     for msg in newMessagesArr:
         if msg not in prevMessageArr:
             addedMessages.append(msg)
+    print('Старый массив: ')
+    print(prevMessageArr)
+    print('Новый массив массив: ')
+    print(newMessagesArr)
+    print('новые сообщения: ')
+    print(addedMessages)
     return addedMessages
     
 async def scanMessages(client, start_date, end_date, curentGroup, user_id):
-    messagesInPeriod = await getMessagesInTimeDiapazone(client, start_date, end_date, curentGroup)
+    try:
+        messagesInPeriod = await getMessagesInTimeDiapazone(client, start_date, end_date, curentGroup)
+    except Exception as e:
+        print('Ошибка в getMessagesInTimeDiapazone')
+        print(e)
     messagesArr = []
-    print("scanMessages started")
+    print(f"scanMessages started for {curentGroup.title}")
     keywords = await get_user_keywords(user_id)  # Получение списка ключевых слов из базы данных
-    print(keywords)
+    keywords_lower = [keyword.lower() for keyword in keywords]
     for msg in messagesInPeriod:
         # Проверяем, что текст сообщения существует и проверяем наличие ключевых слов
         if msg.text:
-            for keyword in keywords:
-                if keyword.lower() in msg.text.lower():
+            msg_lower = msg.text.lower()
+            for keyword in keywords_lower:
+                if keyword in msg_lower:
                     sender = await msg.get_sender()
                     messagesArr.append({
                         'sender': '@' + sender.username if sender.username else 'N/A',
@@ -69,6 +101,9 @@ async def scanMessages(client, start_date, end_date, curentGroup, user_id):
                         'group': curentGroup.title,
                         'keyword': keyword  # Добавляем найденное ключевое слово
                     })
+        print('Найденные ключевые слова:')
+        print(messagesArr)
+        print('--------------------------------')
     return messagesArr
 
 
@@ -186,7 +221,13 @@ async def search_group_not_joined(client, group_name):
 #Функция поиска группы по ee id
 async def get_group_by_id(group_id, client):
     try:
-        input_channel = await client.get_input_entity(group_id)
+        input_channel = await client.get_entity(PeerChat(group_id))
+    except Exception as e:
+        try:
+            input_channel = await client.get_entity(PeerChannel(group_id))
+        except Exception as e:
+            print(e)
+            return "Это приватный чат, или бота прогнали"
     except TypeError as e:
         print(e)
         return "ошибка получения чата"
@@ -198,7 +239,7 @@ async def get_group_by_id(group_id, client):
     
 async def getMessagesInTimeDiapazone(client, start_time, end_time, target_group):
     messagesArr = []
-    print(client.iter_messages(target_group, reverse=True))
+    # print(client.iter_messages(target_group, reverse=True))
     async for message in client.iter_messages(target_group, reverse=True):
         if message.date < start_time:
             continue

@@ -55,11 +55,10 @@ async def clean_db():
 #Запросы сообщений
 async def insert_messages(messages, groupTitle):
     async with aiosqlite.connect("db.db") as db:
-        for message in messages:
-            await db.execute("""
-                INSERT INTO messages (text, date, sender, groupTitle)
-                VALUES (?, ?, ?, ?)
-            """, (message['text'], message['date'], message['sender'], groupTitle))
+        await db.executemany("""
+            INSERT INTO messages (text, date, sender, groupTitle)
+            VALUES (?, ?, ?, ?)
+        """, [(message['text'], message['date'], message['sender'], groupTitle) for message in messages])
         await db.commit()
 
 #Чтение сообщений из базы данных
