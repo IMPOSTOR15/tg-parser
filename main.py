@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 import os
 import asyncio
 import uuid
-
+import traceback
 #Импорты thelethon парсера
 from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.tl.types import InputPeerChannel
@@ -423,9 +423,12 @@ async def add_start_scan__handler(query: CallbackQuery):
     groupList = await get_user_group_list(user_id)
     global groupArr
     groupArr = []
+    global groupIdArr
+    groupIdArr = []
 
     for group in groupList:
         groupArr.append({'chat_id': group[0], 'chat_name': group[1]})
+        groupIdArr.append(int(group[0]))
 
     if (len(groupArr) > 0):
         buttons = []
@@ -446,26 +449,39 @@ async def add_group_callback_handler(callback_query: aiogram.types.CallbackQuery
     callback_data = callback_query.data
     chat_id = callback_query.message.chat.id
     group_id = callback_data.split('_')[2]
-
+    cur_user_id = callback_query.from_user.id
     markup = aiogram.types.InlineKeyboardMarkup(row_width=1)
     markup.add(back_button())
     
     if (group_id == "all"):
         msg_text = "Запущенно сканирование следующих групп:"
         await callback_query.message.edit_text("Ожидайте....")
-        
-        for group in groupArr:
-            selected_group = await get_group_by_id(int(group['chat_id']), client)
+        for id in groupIdArr:
+            selected_group = await get_group_by_id(int(id), client)
             if (selected_group == 'Это приватный чат, или бота прогнали'):
-                await bot.send_message(chat_id=chat_id, text=f"Возможно бота прогнали из группы {group['chat_name']} {group['chat_id']}")
+                await bot.send_message(chat_id=chat_id, text=f"Возможно бота прогнали из группы {id}")
+                groupIdArr.remove(id)
                 continue
-            cur_user_id = callback_query.from_user.id
-            task_uid = str(uuid.uuid4())
+
+        # create_groups_event_handler(client, bot, groupIdArr, cur_user_id, chat_id)
+        try:
+            create_groups_event_handler(client, bot, groupIdArr, cur_user_id, chat_id)
+        except Exception as e:
+            print("Произошла ошибка:")
+            print(str(e))
+            traceback.print_exc()
+        # for group in groupArr:
+        #     selected_group = await get_group_by_id(int(group['chat_id']), client)
+        #     if (selected_group == 'Это приватный чат, или бота прогнали'):
+        #         await bot.send_message(chat_id=chat_id, text=f"Возможно бота прогнали из группы {group['chat_name']} {group['chat_id']}")
+        #         continue
             
+        #     task_uid = str(uuid.uuid4())
+        
             
-            # msg_text += f"\n{selected_group.title}' (ID {selected_group.id})"
-        task = asyncio.create_task(getMessagesTask(client, bot, selected_group, cur_user_id, task_uid, chat_id, groupArr))
-        going_tasks[task_uid] = {"task": task,"by_user": cur_user_id, "scan_group": selected_group.title}
+        #     # msg_text += f"\n{selected_group.title}' (ID {selected_group.id})"
+        # task = asyncio.create_task(getMessagesTask(client, bot, selected_group, cur_user_id, task_uid, chat_id, groupArr))
+        # going_tasks[task_uid] = {"task": task,"by_user": cur_user_id, "scan_group": selected_group.title}
         await callback_query.message.edit_text("Сканированние всех групп запущенно")
         # await callback_query.message.edit_text(msg_text, reply_markup=markup)
     else:
