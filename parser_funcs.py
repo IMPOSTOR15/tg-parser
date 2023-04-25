@@ -26,45 +26,22 @@ async def getMessagesTask(client, bot, curentGroup, user_id, task_uid, chat_id):
     newMessagesList = []
     oldMessagesList = []
     while True:
-        for group in groupArr:
-            try:
-                curentGroup = await get_group_by_id(int(group['chat_id']), client)
-                if (curentGroup == 'Это приватный чат, или бота прогнали'):
-                    await bot.send_message(chat_id=chat_id, text=f"Возможно бота прогнали из группы {group['chat_name']} {group['chat_id']}")
-                    continue
-                end_date = dt.now(pytz.utc)
-                start_date = dt.now(pytz.utc) - timedelta(hours=1)
-                oldMessagesList = newMessagesList
-                newMessagesList = await scanMessages(client, start_date, end_date, curentGroup, user_id)
-                newMessages = []
-                print(f'Отсканированна группа {curentGroup.title}')
-                if(oldMessagesList != []):
-                    newMessages = compareResults(oldMessagesList, newMessagesList)
-                if (newMessages != []):
-                    await insert_messages(newMessages, curentGroup.title)
-                    await notify_users(bot, newMessages, chat_id)
-                    print('Новые сообщения:')
-                    print(newMessages)
-                await asyncio.sleep(3)
-            except Exception as e:
-                print(f'Ошибка: {e}')
-    # while True:
-    #     try:
-    #         end_date = dt.now(pytz.utc)
-    #         start_date = dt.now(pytz.utc) - timedelta(hours=1)
-    #         oldMessagesList = newMessagesList
-    #         newMessagesList = await scanMessages(client, start_date, end_date, curentGroup, user_id)
-    #         newMessages = []
-    #         if(oldMessagesList != []):
-    #             newMessages = compareResults(oldMessagesList, newMessagesList)
-    #         if (newMessages != []):
-    #             await insert_messages(newMessages, curentGroup.title)
-    #             await notify_users(bot, newMessages, chat_id)
-    #             print('Новые сообщения:')
-    #             print(newMessages)
-            
-    #     except Exception as e:
-    #         print(e)
+        try:
+            end_date = dt.now(pytz.utc)
+            start_date = dt.now(pytz.utc) - timedelta(hours=1)
+            oldMessagesList = newMessagesList
+            newMessagesList = await scanMessages(client, start_date, end_date, curentGroup, user_id)
+            newMessages = []
+            if(oldMessagesList != []):
+                newMessages = compareResults(oldMessagesList, newMessagesList)
+            if (newMessages != []):
+                await insert_messages(newMessages, curentGroup.title)
+                await notify_users(bot, newMessages, chat_id)
+                print('Новые сообщения:')
+                print(newMessages)
+            await asyncio.sleep(60)
+        except Exception as e:
+            print(e)
 
 def compareResults(prevMessageArr, newMessagesArr):
     addedMessages = []
