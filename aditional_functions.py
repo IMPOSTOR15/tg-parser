@@ -12,7 +12,7 @@ async def tasksList():
 
 async def notify_users(bot, new_messages, chat_id):
     for message in new_messages:
-        text = f"{message['text']} ({message['date']}) от {message['sender']} в группе: {message['group']}"
+        text = f"{message['text']} ({message['date']}) от {message['sender']} в группе: {message['group']} ключевое слово: {message['keyword']}"
         await bot.send_message(chat_id, text)
 
 async def clean_db_task():
