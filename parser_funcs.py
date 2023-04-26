@@ -21,10 +21,16 @@ from telethon.tl.functions.channels import GetFullChannelRequest, GetParticipant
 from telethon.tl.types import InputPeerChannel
 from dbtools import *
 from telethon.tl.types import PeerUser, PeerChat, PeerChannel
+#Общая переменная для остановки слушателей
+
+from config import config
 
 def create_groups_event_handler(client, bot, groupIdArr, user_id, chat_id):
     @client.on(events.NewMessage(chats=groupIdArr))
     async def message_handler(event):
+        print(config["stop_listening"])
+        if config["stop_listening"]:
+            return
         keywords = await get_user_keywords(user_id)
         keywords_lower = [keyword.lower() for keyword in keywords]
         if event.text:
@@ -34,8 +40,12 @@ def create_groups_event_handler(client, bot, groupIdArr, user_id, chat_id):
                     sender = await event.get_sender()
                     chat = await event.get_chat()
                     await notify_users_for_listnere(bot, event, chat_id, sender.username, chat.title, keyword)
+                    print(f"[{chat.title}] {sender.first_name}: {event.text}")
                     break
-        print(f"[{chat.title}] {sender.first_name}: {event.text}")
+             
+              
+# def stop_groups_event_handler():
+#     stop_listening = True
 
 async def getMessagesTask(client, bot, curentGroup, user_id, task_uid, chat_id, groupArr):
 

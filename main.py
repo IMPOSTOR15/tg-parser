@@ -28,7 +28,7 @@ from dbtools import *
 from parser_funcs import *
 from aditional_functions import *
 from marckups import *
-
+from config import config
 #Загрузка переменных окружения
 load_dotenv()
 
@@ -310,28 +310,6 @@ async def add_group_handler(msg: types.Message):
         # Очищаем состояние пользователя после обработки запроса
         del user_data[msg.from_user.id]
 
-#Обработчик колбэка кнопки выбранной группы
-# @dp.callback_query_handler(lambda callback_query: callback_query.data.startswith('add_group_'))
-# async def add_group_callback_handler(callback_query: aiogram.types.CallbackQuery):
-#     callback_data = callback_query.data
-#     chat_id = callback_query.message.chat.id
-#     group_id = int(callback_data.split('_')[2])
-#     group_title = None
-#     for row in callback_query.message.reply_markup.inline_keyboard:
-#         for button in row:
-#             if button.callback_data == callback_query.data:
-#                 group_title = button.text
-#                 break
-#         if group_title:
-#             break
-#     add_by_userid = callback_query.from_user.id
-#     await add_group(group_id, group_title, add_by_userid)
-#     group = await client.get_entity(group_id)
-    
-#     # Присоединение к группе или каналу
-#     await client(JoinChannelRequest(group))
-#     await bot.send_message(chat_id, f"Группа '{group_title}' (ID {group_id}) успешно добавлена.")
-
 @dp.callback_query_handler(menu_cd.filter(action="join_group_by_link"))
 async def join_group_by_link_handler(query: CallbackQuery):
     await query.answer()
@@ -443,6 +421,7 @@ async def add_start_scan__handler(query: CallbackQuery):
     else:
         await query.message.edit_text(f"У вас нет добавленных групп", reply_markup=markup)
 
+
 #Отработчик кнопки старта задачи на сканирование
 @dp.callback_query_handler(lambda callback_query: callback_query.data.startswith('start_scan_'))
 async def add_group_callback_handler(callback_query: aiogram.types.CallbackQuery):
@@ -450,11 +429,13 @@ async def add_group_callback_handler(callback_query: aiogram.types.CallbackQuery
     chat_id = callback_query.message.chat.id
     group_id = callback_data.split('_')[2]
     cur_user_id = callback_query.from_user.id
+
     markup = aiogram.types.InlineKeyboardMarkup(row_width=1)
     markup.add(back_button())
-    
+    config["stop_listening"] = False
+
     if (group_id == "all"):
-        msg_text = "Запущенно сканирование следующих групп:"
+        msg_text = "Запущенно сканирование следующих групп: \n"
         await callback_query.message.edit_text("Ожидайте....")
         for id in groupIdArr:
             selected_group = await get_group_by_id(int(id), client)
@@ -462,77 +443,38 @@ async def add_group_callback_handler(callback_query: aiogram.types.CallbackQuery
                 await bot.send_message(chat_id=chat_id, text=f"Возможно бота прогнали из группы {id}")
                 groupIdArr.remove(id)
                 continue
-
-        # create_groups_event_handler(client, bot, groupIdArr, cur_user_id, chat_id)
         try:
             create_groups_event_handler(client, bot, groupIdArr, cur_user_id, chat_id)
+
         except Exception as e:
             print("Произошла ошибка:")
             print(str(e))
             traceback.print_exc()
-        # for group in groupArr:
-        #     selected_group = await get_group_by_id(int(group['chat_id']), client)
-        #     if (selected_group == 'Это приватный чат, или бота прогнали'):
-        #         await bot.send_message(chat_id=chat_id, text=f"Возможно бота прогнали из группы {group['chat_name']} {group['chat_id']}")
-        #         continue
-            
-        #     task_uid = str(uuid.uuid4())
-        
-            
-        #     # msg_text += f"\n{selected_group.title}' (ID {selected_group.id})"
-        # task = asyncio.create_task(getMessagesTask(client, bot, selected_group, cur_user_id, task_uid, chat_id, groupArr))
-        # going_tasks[task_uid] = {"task": task,"by_user": cur_user_id, "scan_group": selected_group.title}
-        await callback_query.message.edit_text("Сканированние всех групп запущенно")
-        # await callback_query.message.edit_text(msg_text, reply_markup=markup)
+        for group in groupArr:
+            msg_text += f"{group['chat_name']} id: {group['chat_id']}\n"
+        await callback_query.message.edit_text(msg_text, reply_markup=markup)
     else:
-        
         selected_group = await get_group_by_id(int(group_id), client)
-        #Получаем id текущего чата
-        cur_user_id = callback_query.from_user.id
-        # Запуск сканирования
-        task_uid = str(uuid.uuid4())
-        task = asyncio.create_task(getMessagesTask(client, bot, selected_group, cur_user_id, task_uid, chat_id, groupArr))
-        going_tasks[task_uid] = {"task": task,"by_user": cur_user_id, "scan_group": selected_group.title}
-        await callback_query.message.edit_text(f"Начал сканированние группы '{selected_group.title}' (ID {selected_group.id}) \n Id отслеживания: {task_uid}", reply_markup=markup)
-    # await bot.send_message(chat_id, f"Начал сканированние группы '{selected_group.title}' (ID {selected_group.id}) \n Id отслеживания: {task_uid}")
+        if (selected_group == 'Это приватный чат, или бота прогнали'):
+            await bot.send_message(chat_id=chat_id, text=f"Возможно бота прогнали из группы {id} Попробуйте выбрать другую группу")
+        else:
+            try:
+                create_groups_event_handler(client, bot, [int(group_id),], cur_user_id, chat_id)
+
+                await callback_query.message.edit_text(f"Начал сканированние группы '{selected_group.title}' (ID {selected_group.id})", reply_markup=markup)
+            except Exception as e:
+                print("Произошла ошибка:")
+                print(str(e))
+                traceback.print_exc()
 
 #Обработчик команды остановки сканирования
-
 @dp.callback_query_handler(menu_cd.filter(action="selective_stop"))
 async def add_stop_scan__handler(query: CallbackQuery):
     user_id = query.from_user.id
     markup = aiogram.types.InlineKeyboardMarkup()
-    if (len(going_tasks) > 0):
-        markup.add(aiogram.types.InlineKeyboardButton(text="Остановить все", callback_data="cancel_task_all"))
-        for task_uid, task_info in going_tasks.items():
-            if task_info['by_user'] == user_id:
-                button_text = f"{task_info['scan_group']} ({task_uid})"
-                callback_data = f"cancel_task_{task_uid}"
-                markup.add(aiogram.types.InlineKeyboardButton(text=button_text, callback_data=callback_data))
-        markup.add(back_button())
-        await query.message.edit_text(text="Выберите задачу для остановки:", reply_markup=markup)
-    else:
-        await query.message.edit_text(text="У вас нет активных задач.", reply_markup = await back_keyboard())
-
-#Обработчик кнопки отмены задачи на сканирование
-@dp.callback_query_handler(lambda callback_query: callback_query.data.startswith('cancel_task_'))
-async def add_stop_scan_callback_handler(callback_query: aiogram.types.CallbackQuery):
-    chat_id = callback_query.message.chat.id
-    callback_data = callback_query.data
-    task_id = callback_data.split('_')[2]
-    if(task_id == "all"):
-        for key, value in going_tasks.items():
-            task_name = going_tasks[key]['scan_group']
-            task_entity = going_tasks[key]['task']
-            task_entity.cancel()
-        going_tasks.clear()
-        await callback_query.message.edit_text(text=f"Все задачи остановленны", reply_markup = await back_keyboard())
-    else:
-        task_name = going_tasks[task_id]['scan_group']
-        task_entity = going_tasks[task_id]['task']
-        task_entity.cancel()
-        del going_tasks[task_id]
-        await callback_query.message.edit_text(text=f"Задача сканирования группы '{task_name}' остановленна.", reply_markup = await back_keyboard())
+    markup.add(back_button())
+    config["stop_listening"] = True
+    await query.message.edit_text(text="Все задачи остановленны", reply_markup = await back_keyboard())
 
 
 #Обработчик получения команды без обработчика
@@ -551,7 +493,7 @@ async def main_telegram():
 
     while True:
         print("working....")
-        await asyncio.sleep(120)
+        await asyncio.sleep(10)
 
 #Функция запуска телеграм-бота
 async def main_bot():
