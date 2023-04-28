@@ -21,16 +21,18 @@ from telethon.tl.functions.channels import GetFullChannelRequest, GetParticipant
 from telethon.tl.types import InputPeerChannel
 from dbtools import *
 from telethon.tl.types import PeerUser, PeerChat, PeerChannel
-#Общая переменная для остановки слушателей
 
-from config import config
 
-def create_groups_event_handler(client, bot, groupIdArr, user_id, chat_id):
-    @client.on(events.NewMessage(chats=groupIdArr))
-    async def message_handler(event):
-        print(config["stop_listening"])
-        if config["stop_listening"]:
+class GroupsEventHandler:
+    def __init__(self, client, bot):
+        self.client = client
+        self.bot = bot
+        self.stop_listening = False
+
+    async def message_handler(self, event, user_id, chat_id, bot):
+        if self.stop_listening:
             return
+        print('new msg')
         keywords = await get_user_keywords(user_id)
         keywords_lower = [keyword.lower() for keyword in keywords]
         if event.text:
@@ -42,10 +44,15 @@ def create_groups_event_handler(client, bot, groupIdArr, user_id, chat_id):
                     await notify_users_for_listnere(bot, event, chat_id, sender.username, chat.title, keyword)
                     print(f"[{chat.title}] {sender.first_name}: {event.text}")
                     break
-             
-              
-# def stop_groups_event_handler():
-#     stop_listening = True
+
+    def create_groups_event_handler(self, groupIdArr, user_id, chat_id):
+        if self.stop_listening:
+            self.stop_listening = False
+        else:
+            self.client.add_event_handler(lambda e: self.message_handler(e, user_id, chat_id, self.bot), events.NewMessage(chats=groupIdArr))
+
+    def stop_handler(self):
+        self.stop_listening = True
 
 async def getMessagesTask(client, bot, curentGroup, user_id, task_uid, chat_id, groupArr):
 
