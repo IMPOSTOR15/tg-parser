@@ -28,7 +28,6 @@ from dbtools import *
 from parser_funcs import *
 from aditional_functions import *
 from marckups import *
-from config import config
 #Загрузка переменных окружения
 load_dotenv()
 
@@ -421,7 +420,7 @@ async def add_start_scan__handler(query: CallbackQuery):
     else:
         await query.message.edit_text(f"У вас нет добавленных групп", reply_markup=markup)
 
-
+event_handler = GroupsEventHandler(client, bot)
 #Отработчик кнопки старта задачи на сканирование
 @dp.callback_query_handler(lambda callback_query: callback_query.data.startswith('start_scan_'))
 async def add_group_callback_handler(callback_query: aiogram.types.CallbackQuery):
@@ -429,14 +428,12 @@ async def add_group_callback_handler(callback_query: aiogram.types.CallbackQuery
     chat_id = callback_query.message.chat.id
     group_id = callback_data.split('_')[2]
     cur_user_id = callback_query.from_user.id
-
     markup = aiogram.types.InlineKeyboardMarkup(row_width=1)
     markup.add(back_button())
-    config["stop_listening"] = False
-
     if (group_id == "all"):
         msg_text = "Запущенно сканирование следующих групп: \n"
         await callback_query.message.edit_text("Ожидайте....")
+        global groupIdArr
         for id in groupIdArr:
             selected_group = await get_group_by_id(int(id), client)
             if (selected_group == 'Это приватный чат, или бота прогнали'):
@@ -444,38 +441,45 @@ async def add_group_callback_handler(callback_query: aiogram.types.CallbackQuery
                 groupIdArr.remove(id)
                 continue
         try:
-            create_groups_event_handler(client, bot, groupIdArr, cur_user_id, chat_id)
-
+            event_handler.create_groups_event_handler(groupIdArr, cur_user_id, chat_id)
+            global groupArr
+            for group in groupArr:
+                msg_text += f"{group['chat_name']} id: {group['chat_id']}\n"
+            await callback_query.message.edit_text(msg_text, reply_markup=markup)
         except Exception as e:
             print("Произошла ошибка:")
             print(str(e))
             traceback.print_exc()
-        for group in groupArr:
-            msg_text += f"{group['chat_name']} id: {group['chat_id']}\n"
-        await callback_query.message.edit_text(msg_text, reply_markup=markup)
+            await callback_query.message.edit_text('Ошибка запуска сканирования', reply_markup=markup)
+        
     else:
         selected_group = await get_group_by_id(int(group_id), client)
         if (selected_group == 'Это приватный чат, или бота прогнали'):
             await bot.send_message(chat_id=chat_id, text=f"Возможно бота прогнали из группы {id} Попробуйте выбрать другую группу")
         else:
             try:
-                create_groups_event_handler(client, bot, [int(group_id),], cur_user_id, chat_id)
-
-                await callback_query.message.edit_text(f"Начал сканированние группы '{selected_group.title}' (ID {selected_group.id})", reply_markup=markup)
+                event_handler.create_groups_event_handler(groupArr.append(selected_group.id), cur_user_id, chat_id)
+                await bot.send_message(chat_id=chat_id, text=f"Начал сканированние группы '{selected_group.title}' (ID {selected_group.id})\nID-сканирования: {task_id}")
+                await callback_query.message.edit_text('Сканирование запущенно', reply_markup=markup)
             except Exception as e:
                 print("Произошла ошибка:")
                 print(str(e))
                 traceback.print_exc()
+                await callback_query.message.edit_text('Ошибка запуска сканирования', reply_markup=markup)
 
 #Обработчик команды остановки сканирования
 @dp.callback_query_handler(menu_cd.filter(action="selective_stop"))
 async def add_stop_scan__handler(query: CallbackQuery):
-    user_id = query.from_user.id
-    markup = aiogram.types.InlineKeyboardMarkup()
+    markup = aiogram.types.InlineKeyboardMarkup(row_width=1)
     markup.add(back_button())
-    config["stop_listening"] = True
-    await query.message.edit_text(text="Все задачи остановленны", reply_markup = await back_keyboard())
-
+    try:
+        event_handler.stop_handler()
+        await query.message.edit_text(text="Все задачи сканирования остановленны", reply_markup = await back_keyboard())
+    except Exception as e:
+        print("Произошла ошибка:")
+        print(str(e))
+        traceback.print_exc()            
+        await query.message.edit_text(text="Ошибка остановки сканирования", reply_markup = await back_keyboard())
 
 #Обработчик получения команды без обработчика
 @dp.message_handler(commands=['unknown_command'], commands_prefix='/', regexp='^/')
