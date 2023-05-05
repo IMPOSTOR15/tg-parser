@@ -7,7 +7,7 @@ from telethon.tl.functions.messages import ImportChatInviteRequest
 from datetime import timedelta
 import datetime
 from datetime import datetime as dt
-import pytz
+# import pytz
 from aditional_functions import notify_users, notify_users_for_listnere
 import asyncio
 from telethon.tl.functions.channels import GetParticipantRequest
@@ -27,7 +27,9 @@ class GroupsEventHandler:
     def __init__(self, client, bot):
         self.client = client
         self.bot = bot
-        self.stop_listening = False
+        self.stop_listening = True
+        self.isHandlerAlreadySatisfy = False
+        self.mainHandler = None
 
     async def message_handler(self, event, user_id, chat_id, bot):
         if self.stop_listening:
@@ -46,51 +48,69 @@ class GroupsEventHandler:
                     break
 
     def create_groups_event_handler(self, groupIdArr, user_id, chat_id):
-        if self.stop_listening:
-            self.stop_listening = False
+        # if (self.stop_listening == False):
+        #     self.client.add_event_handler(lambda e: self.message_handler(e, user_id, chat_id, self.bot), events.NewMessage(chats=groupIdArr))
+            
+        if self.stop_listening is False:
+            if self.mainHandler is None:
+                self.mainHandler = lambda e: self.message_handler(e, user_id, chat_id, self.bot)
+                self.client.add_event_handler(self.mainHandler, events.NewMessage(chats=groupIdArr))
+                print("Слушатель добавлен")
+            else:
+                print("Слушатель уже существует")
+
+    def remove_groups_event_handler(self):
+        if self.mainHandler is not None:
+            self.client.remove_event_handler(self.mainHandler)
+            self.mainHandler = None
+            print("Слушатель удален")
         else:
-            self.client.add_event_handler(lambda e: self.message_handler(e, user_id, chat_id, self.bot), events.NewMessage(chats=groupIdArr))
+            print("Слушатель не существует")
 
     def stop_handler(self):
         self.stop_listening = True
+        self.remove_groups_event_handler()
 
-async def getMessagesTask(client, bot, curentGroup, user_id, task_uid, chat_id, groupArr):
+    def start_handler(self):
+        self.stop_listening = False
 
-    print(f"getMessagesTask started for group: {groupArr}")
-    newMessagesList = []
-    oldMessagesList = []
-    while True:
-        for group in groupArr:
-            try:
-                print('Начала отработки группы')
-                curentGroup = await get_group_by_id(int(group['chat_id']), client)
-                print('Проверка группы на доступность')
-                if (curentGroup == 'Это приватный чат, или бота прогнали'):
-                    print('Группа не прошла проверку')
-                    await bot.send_message(chat_id=chat_id, text=f"Возможно бота прогнали из группы {group['chat_name']} {group['chat_id']}")
-                    continue
-                print('Установка дат')
-                end_date = dt.now(pytz.utc)
-                start_date = dt.now(pytz.utc) - timedelta(hours=1)
-                print('Установка массивов сообщений')
-                oldMessagesList = newMessagesList
-                newMessagesList = await scanMessages(client, start_date, end_date, curentGroup, user_id)
-                newMessages = []
-                print(f'Отсканированна группа {curentGroup.title}')
-                print('Попытка сравнить сообщения')
-                if(oldMessagesList != []):
-                    newMessages = compareResults(oldMessagesList, newMessagesList)
-                    print('Произведено сравнение сообщений')
-                if (newMessages != []):
-                    print('Оповещение поьзователей')
-                    await insert_messages(newMessages, curentGroup.title)
-                    await notify_users(bot, newMessages, chat_id)
-                    print('Новые сообщения:')
-                    print(newMessages)
-                print('Отработка группы завершена')
-                await asyncio.sleep(1)
-            except Exception as e:
-                print(f'Ошибка: {e}')
+# async def getMessagesTask(client, bot, curentGroup, user_id, task_uid, chat_id, groupArr):
+
+#     print(f"getMessagesTask started for group: {groupArr}")
+#     newMessagesList = []
+#     oldMessagesList = []
+#     while True:
+#         for group in groupArr:
+#             try:
+#                 print('Начала отработки группы')
+#                 curentGroup = await get_group_by_id(int(group['chat_id']), client)
+#                 print('Проверка группы на доступность')
+#                 if (curentGroup == 'Это приватный чат, или бота прогнали'):
+#                     print('Группа не прошла проверку')
+#                     await bot.send_message(chat_id=chat_id, text=f"Возможно бота прогнали из группы {group['chat_name']} {group['chat_id']}")
+#                     continue
+#                 print('Установка дат')
+#                 end_date = dt.now(pytz.utc)
+#                 start_date = dt.now(pytz.utc) - timedelta(hours=1)
+#                 print('Установка массивов сообщений')
+#                 oldMessagesList = newMessagesList
+#                 newMessagesList = await scanMessages(client, start_date, end_date, curentGroup, user_id)
+#                 newMessages = []
+#                 print(f'Отсканированна группа {curentGroup.title}')
+#                 print('Попытка сравнить сообщения')
+#                 if(oldMessagesList != []):
+#                     newMessages = compareResults(oldMessagesList, newMessagesList)
+#                     print('Произведено сравнение сообщений')
+#                 if (newMessages != []):
+#                     print('Оповещение поьзователей')
+#                     await insert_messages(newMessages, curentGroup.title)
+#                     await notify_users(bot, newMessages, chat_id)
+#                     print('Новые сообщения:')
+#                     print(newMessages)
+#                 print('Отработка группы завершена')
+#                 await asyncio.sleep(1)
+#             except Exception as e:
+#                 print(f'Ошибка: {e}')
     # while True:
     #     try:
     #         end_date = dt.now(pytz.utc)

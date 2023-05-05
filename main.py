@@ -124,8 +124,6 @@ async def cmd_help(message: types.Message):
     keyboard = await help_keyboard()
     await bot.send_message(chat_id=message.chat.id, text=help_text, reply_markup=keyboard)
 
-
-
 #Обработчик команды создания нового пользователя
 async def user_exists(user_id, user_chat_id):
     users_list = await get_users_list()
@@ -393,79 +391,108 @@ async def process_group_ids_to_remove(message: types.Message):
 
     await message.reply(result_message)
 
+event_handler = GroupsEventHandler(client, bot)
+
 #Обработчик команды запуска сканирования
 @dp.callback_query_handler(menu_cd.filter(action="selective_scan"))
-async def add_start_scan__handler(query: CallbackQuery):
-    user_id = query.from_user.id
-    groupList = await get_user_group_list(user_id)
-    global groupArr
+async def add_start_scan__handler(callback_query: CallbackQuery):
+    user_id = callback_query.from_user.id
+    chat_id = callback_query.message.chat.id
+    markup = aiogram.types.InlineKeyboardMarkup(row_width=1)
+    markup.add(back_button())
+
+    userGroupList = await get_user_group_list(user_id)
+
     groupArr = []
-    global groupIdArr
     groupIdArr = []
 
-    for group in groupList:
+    for group in userGroupList:
         groupArr.append({'chat_id': group[0], 'chat_name': group[1]})
         groupIdArr.append(int(group[0]))
 
     if (len(groupArr) > 0):
-        buttons = []
-        buttons.append(aiogram.types.InlineKeyboardButton(text="Запустить все", callback_data=f"start_scan_all"))
-        for group in groupArr:
-            buttons.append(aiogram.types.InlineKeyboardButton(text=group['chat_name'], callback_data=f"start_scan_{group['chat_id']}"))
-        markup = aiogram.types.InlineKeyboardMarkup(row_width=1)
-        markup.add(*buttons)
-        markup.add(back_button())
-
-        await query.message.edit_text(f"Выберите нужную группу для старта сканирования из списка ниже:", reply_markup=markup)
-    else:
-        await query.message.edit_text(f"У вас нет добавленных групп", reply_markup=markup)
-
-event_handler = GroupsEventHandler(client, bot)
-#Отработчик кнопки старта задачи на сканирование
-@dp.callback_query_handler(lambda callback_query: callback_query.data.startswith('start_scan_'))
-async def add_group_callback_handler(callback_query: aiogram.types.CallbackQuery):
-    callback_data = callback_query.data
-    chat_id = callback_query.message.chat.id
-    group_id = callback_data.split('_')[2]
-    cur_user_id = callback_query.from_user.id
-    markup = aiogram.types.InlineKeyboardMarkup(row_width=1)
-    markup.add(back_button())
-    if (group_id == "all"):
-        msg_text = "Запущенно сканирование следующих групп: \n"
-        await callback_query.message.edit_text("Ожидайте....")
-        global groupIdArr
-        for id in groupIdArr:
-            selected_group = await get_group_by_id(int(id), client)
-            if (selected_group == 'Это приватный чат, или бота прогнали'):
-                await bot.send_message(chat_id=chat_id, text=f"Возможно бота прогнали из группы {id}")
-                groupIdArr.remove(id)
-                continue
-        try:
-            event_handler.create_groups_event_handler(groupIdArr, cur_user_id, chat_id)
-            global groupArr
-            for group in groupArr:
-                msg_text += f"{group['chat_name']} id: {group['chat_id']}\n"
-            await callback_query.message.edit_text(msg_text, reply_markup=markup)
-        except Exception as e:
-            print("Произошла ошибка:")
-            print(str(e))
-            traceback.print_exc()
-            await callback_query.message.edit_text('Ошибка запуска сканирования', reply_markup=markup)
-        
-    else:
-        selected_group = await get_group_by_id(int(group_id), client)
-        if (selected_group == 'Это приватный чат, или бота прогнали'):
-            await bot.send_message(chat_id=chat_id, text=f"Возможно бота прогнали из группы {id} Попробуйте выбрать другую группу")
-        else:
+        # buttons = []
+        # buttons.append(aiogram.types.InlineKeyboardButton(text="Запустить все", callback_data=f"start_scan_all"))
+        print(event_handler.stop_listening)
+        if (event_handler.stop_listening == True):
+            event_handler.start_handler()
+            msg_text = "Запущенно сканирование следующих групп: \n"
+            await callback_query.message.edit_text("Ожидайте....")
+            for id in groupIdArr:
+                selected_group = await get_group_by_id(int(id), client)
+                if (selected_group == 'Это приватный чат, или бота прогнали'):
+                    await bot.send_message(chat_id=chat_id, text=f"Возможно бота прогнали из группы {id}")
+                    groupIdArr.remove(id)
+                    continue
             try:
-                event_handler.create_groups_event_handler(groupArr.append(selected_group.id), cur_user_id, chat_id)
-                await bot.send_message(chat_id=chat_id, text=f"Начал сканированние группы '{selected_group.title}' (ID {selected_group.id})\nID-сканирования: {task_id}")
-                await callback_query.message.edit_text('Сканирование запущенно', reply_markup=markup)
+                event_handler.create_groups_event_handler(groupIdArr, user_id, chat_id)
+                for group in groupArr:
+                    msg_text += f"{group['chat_name']} id: {group['chat_id']}\n"
+                await callback_query.message.edit_text(msg_text, reply_markup=markup)
             except Exception as e:
                 print("Произошла ошибка:")
                 print(str(e))
                 traceback.print_exc()
                 await callback_query.message.edit_text('Ошибка запуска сканирования', reply_markup=markup)
+        else:
+            await callback_query.message.edit_text('Сканирование уже запущенно', reply_markup=markup)
+        # for group in groupArr:
+        #     buttons.append(aiogram.types.InlineKeyboardButton(text=group['chat_name'], callback_data=f"start_scan_{group['chat_id']}"))
+        # markup = aiogram.types.InlineKeyboardMarkup(row_width=1)
+        # markup.add(*buttons)
+        # markup.add(back_button())
+
+        # await callback_query.message.edit_text(f"Выберите нужную группу для старта сканирования из списка ниже:", reply_markup=markup)
+    else:
+        await callback_query.message.edit_text(f"У вас нет добавленных групп", reply_markup=markup)
+
+
+
+#Отработчик кнопки старта задачи на сканирование
+# @dp.callback_query_handler(lambda callback_query: callback_query.data.startswith('start_scan_'))
+# async def add_group_callback_handler(callback_query: aiogram.types.CallbackQuery):
+#     callback_data = callback_query.data
+#     chat_id = callback_query.message.chat.id
+#     group_id = callback_data.split('_')[2]
+#     cur_user_id = callback_query.from_user.id
+#     markup = aiogram.types.InlineKeyboardMarkup(row_width=1)
+#     markup.add(back_button())
+#     if (group_id == "all"):
+#         msg_text = "Запущенно сканирование следующих групп: \n"
+#         await callback_query.message.edit_text("Ожидайте....")
+#         global groupIdArr
+#         for id in groupIdArr:
+#             selected_group = await get_group_by_id(int(id), client)
+#             if (selected_group == 'Это приватный чат, или бота прогнали'):
+#                 await bot.send_message(chat_id=chat_id, text=f"Возможно бота прогнали из группы {id}")
+#                 groupIdArr.remove(id)
+#                 continue
+#         try:
+#             event_handler.create_groups_event_handler(groupIdArr, cur_user_id, chat_id)
+#             global groupArr
+#             for group in groupArr:
+#                 msg_text += f"{group['chat_name']} id: {group['chat_id']}\n"
+#             await callback_query.message.edit_text(msg_text, reply_markup=markup)
+#         except Exception as e:
+#             print("Произошла ошибка:")
+#             print(str(e))
+#             traceback.print_exc()
+#             await callback_query.message.edit_text('Ошибка запуска сканирования', reply_markup=markup)
+        
+#     else:
+#         selected_group = await get_group_by_id(int(group_id), client)
+#         if (selected_group == 'Это приватный чат, или бота прогнали'):
+#             await bot.send_message(chat_id=chat_id, text=f"Возможно бота прогнали из группы {id} Попробуйте выбрать другую группу")
+#         else:
+#             try:
+#                 event_handler.create_groups_event_handler(groupArr.append(selected_group.id), cur_user_id, chat_id)
+#                 await bot.send_message(chat_id=chat_id, text=f"Начал сканированние группы '{selected_group.title}' (ID {selected_group.id})\nID-сканирования: {task_id}")
+#                 await callback_query.message.edit_text('Сканирование запущенно', reply_markup=markup)
+#             except Exception as e:
+#                 print("Произошла ошибка:")
+#                 print(str(e))
+#                 traceback.print_exc()
+#                 await callback_query.message.edit_text('Ошибка запуска сканирования', reply_markup=markup)
 
 #Обработчик команды остановки сканирования
 @dp.callback_query_handler(menu_cd.filter(action="selective_stop"))
@@ -473,8 +500,11 @@ async def add_stop_scan__handler(query: CallbackQuery):
     markup = aiogram.types.InlineKeyboardMarkup(row_width=1)
     markup.add(back_button())
     try:
-        event_handler.stop_handler()
-        await query.message.edit_text(text="Все задачи сканирования остановленны", reply_markup = await back_keyboard())
+        if (event_handler.stop_listening == False):
+            event_handler.stop_handler()
+            await query.message.edit_text(text="Все задачи сканирования остановленны", reply_markup = await back_keyboard())
+        else:
+            await query.message.edit_text(text="Нет активных задач для остановки", reply_markup = await back_keyboard())
     except Exception as e:
         print("Произошла ошибка:")
         print(str(e))

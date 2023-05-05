@@ -3,6 +3,7 @@ __pycache__/
 *.session-journal
 *.env
 venv
+docker-compose.yml
 db.db
 *.rar
 *.json
