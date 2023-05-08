@@ -21,7 +21,7 @@ from telethon.tl.functions.channels import GetFullChannelRequest, GetParticipant
 from telethon.tl.types import InputPeerChannel
 from dbtools import *
 from telethon.tl.types import PeerUser, PeerChat, PeerChannel
-
+import logging
 
 class GroupsEventHandler:
     def __init__(self, client, bot):
@@ -35,6 +35,7 @@ class GroupsEventHandler:
         if self.stop_listening:
             return
         print('new msg')
+        logging.info('new msg')
         keywords = await get_user_keywords(user_id)
         keywords_lower = [keyword.lower() for keyword in keywords]
         if event.text:
@@ -45,27 +46,37 @@ class GroupsEventHandler:
                     chat = await event.get_chat()
                     await notify_users_for_listnere(bot, event, chat_id, sender.username, chat.title, keyword)
                     print(f"[{chat.title}] {sender.first_name}: {event.text}")
+                    logging.info(f"[{chat.title}] {sender.first_name}: {event.text}")
                     break
 
     def create_groups_event_handler(self, groupIdArr, user_id, chat_id):
         # if (self.stop_listening == False):
         #     self.client.add_event_handler(lambda e: self.message_handler(e, user_id, chat_id, self.bot), events.NewMessage(chats=groupIdArr))
-            
-        if self.stop_listening is False:
-            if self.mainHandler is None:
-                self.mainHandler = lambda e: self.message_handler(e, user_id, chat_id, self.bot)
-                self.client.add_event_handler(self.mainHandler, events.NewMessage(chats=groupIdArr))
-                print("Слушатель добавлен")
-            else:
-                print("Слушатель уже существует")
+        print("Попытка создать Экземпляр уже в функции")
+        logging.info("Попытка создать Экземпляр уже в функции")
+        try:   
+            if self.stop_listening is False:
+                if self.mainHandler is None:
+                    self.mainHandler = lambda e: self.message_handler(e, user_id, chat_id, self.bot)
+                    self.client.add_event_handler(self.mainHandler, events.NewMessage(chats=groupIdArr))
+                    print("Слушатель добавлен")
+                    logging.info("Слушатель добавлен")
+                else:
+                    print("Слушатель уже существует")
+                    logging.info("Слушатель уже существует")
+        except Exception as e:
+            print(e)
+            logging.info(e)
 
     def remove_groups_event_handler(self):
         if self.mainHandler is not None:
             self.client.remove_event_handler(self.mainHandler)
             self.mainHandler = None
             print("Слушатель удален")
+            logging.info("Слушатель удален")
         else:
             print("Слушатель не существует")
+            logging.info("Слушатель не существует")
 
     def stop_handler(self):
         self.stop_listening = True
@@ -284,6 +295,7 @@ async def search_group_not_joined(client, group_name):
 
 #Функция поиска группы по ee id
 async def get_group_by_id(group_id, client):
+    logging.info("get_group_by_id")
     try:
         input_channel = await client.get_entity(PeerChat(group_id))
     except Exception as e:
@@ -291,6 +303,7 @@ async def get_group_by_id(group_id, client):
             input_channel = await client.get_entity(PeerChannel(group_id))
         except Exception as e:
             print(e)
+            logging.info(e)
             return "Это приватный чат, или бота прогнали"
     except TypeError as e:
         print(e)
@@ -299,6 +312,7 @@ async def get_group_by_id(group_id, client):
         group = await client.get_entity(input_channel)
     except errors.ChannelPrivateError:
         return "Это приватный чат, или бота прогнали"
+    logging.info("get_group_by_id end")
     return group
     
 async def getMessagesInTimeDiapazone(client, start_time, end_time, target_group):
