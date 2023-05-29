@@ -38,16 +38,20 @@ class GroupsEventHandler:
         logging.info('new msg')
         keywords = await get_user_keywords(user_id)
         keywords_lower = [keyword.lower() for keyword in keywords]
+        blacklistkeywords = await get_user_blacklistkeywords(user_id)
+        blacklistkeywords_lower = [blacklistkeyword.lower() for blacklistkeyword in blacklistkeywords]
         if event.text:
             msg_lower = event.text.lower()
             for keyword in keywords_lower:
                 if keyword in msg_lower:
-                    sender = await event.get_sender()
-                    chat = await event.get_chat()
-                    await notify_users_for_listnere(bot, event, chat_id, sender.username, chat.title, keyword)
-                    print(f"[{chat.title}] {sender.first_name}: {event.text}")
-                    logging.info(f"[{chat.title}] {sender.first_name}: {event.text}")
-                    break
+                    for blacklistkeyword in blacklistkeywords_lower:
+                        if not blacklistkeyword in msg_lower:
+                            sender = await event.get_sender()
+                            chat = await event.get_chat()
+                            await notify_users_for_listnere(bot, event, chat_id, sender.username, chat.title, keyword)
+                            print(f"[{chat.title}] {sender.first_name}: {event.text}")
+                            logging.info(f"[{chat.title}] {sender.first_name}: {event.text}")
+                            break
 
     def create_groups_event_handler(self, groupIdArr, user_id, chat_id):
         # if (self.stop_listening == False):

@@ -7,10 +7,11 @@ menu_cd = CallbackData("menu", "action")
 async def help_keyboard():
     keyboard = InlineKeyboardMarkup()
     keywords_button = InlineKeyboardButton("Ключевики", callback_data=menu_cd.new(action="keywords"))
+    blacklistkeywords_button = InlineKeyboardButton("Стоп слова", callback_data=menu_cd.new(action="blacklistkeywords"))
     groups_button = InlineKeyboardButton("Группы", callback_data=menu_cd.new(action="groups"))
     scan_button = InlineKeyboardButton("Сканирование", callback_data=menu_cd.new(action="scan"))
     users_button = InlineKeyboardButton("Пользователи", callback_data=menu_cd.new(action="users"))
-    keyboard.add(keywords_button, groups_button, scan_button, users_button)
+    keyboard.add(keywords_button, blacklistkeywords_button, groups_button, scan_button, users_button)
     return keyboard
 
 async def keywords_keyboard():
@@ -18,6 +19,15 @@ async def keywords_keyboard():
     list_button = InlineKeyboardButton("Список", callback_data=menu_cd.new(action="list_keywords"))
     add_button = InlineKeyboardButton("Добавить", callback_data=menu_cd.new(action="add_keywords"))
     delete_button = InlineKeyboardButton("Удалить", callback_data=menu_cd.new(action="remove_keywords"))
+    keyboard.add(list_button, add_button, delete_button)
+    keyboard.add(back_button())
+    return keyboard
+
+async def blacklistkeywords_keyboard():
+    keyboard = InlineKeyboardMarkup()
+    list_button = InlineKeyboardButton("Список", callback_data=menu_cd.new(action="list_blacklistkeywords"))
+    add_button = InlineKeyboardButton("Добавить", callback_data=menu_cd.new(action="add_blacklistkeywords"))
+    delete_button = InlineKeyboardButton("Удалить", callback_data=menu_cd.new(action="remove_blacklistkeywords"))
     keyboard.add(list_button, add_button, delete_button)
     keyboard.add(back_button())
     return keyboard

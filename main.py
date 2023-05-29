@@ -87,6 +87,13 @@ async def show_keywords_menu(query: CallbackQuery):
     await query.message.edit_text(text, reply_markup=keyboard)
     await query.answer()
 
+@dp.callback_query_handler(menu_cd.filter(action="blacklistkeywords"))
+async def show_blacklistkeywords_menu(query: CallbackQuery):
+    text = "Меню взаимодействия с стоп словами"
+    keyboard = await blacklistkeywords_keyboard()
+    await query.message.edit_text(text, reply_markup=keyboard)
+    await query.answer()
+
 @dp.callback_query_handler(menu_cd.filter(action="groups"))
 async def show_groups_menu(query: CallbackQuery):
     text = "Меню взаимодействия с группами"
@@ -159,6 +166,39 @@ async def process_inline_answer(callback_query: aiogram.types.CallbackQuery):
     await bot.answer_callback_query(callback_query.id)
 
 #Обработчик команды добавления ключевого слова
+@dp.callback_query_handler(menu_cd.filter(action="add_blacklistkeywords"))
+async def add_keywords_handler(query: CallbackQuery):
+    await query.answer()
+    user_data[query.from_user.id] = "add_blacklistkeywords"
+    print(user_data)
+    logging.info(user_data)
+    await bot.send_message(chat_id=query.message.chat.id, text="Введите ключевое слово или фразу, которое необходимо добавить, если их несколько разделите запятыми")
+
+@dp.message_handler(lambda message: message.text and message.from_user.id in user_data and user_data[message.from_user.id] == "add_blacklistkeywords")
+async def add_blacklistkeywords(msg: types.Message):
+    blacklistkeywords = msg.text.split(', ')
+
+    added_keywords = []
+    failed_keywords = []
+
+    for keyword in blacklistkeywords:
+        keyword = keyword.strip()
+        if await add_blacklistkeyword(msg.from_user.id, keyword):
+            added_keywords.append(keyword)
+        else:
+            failed_keywords.append(keyword)
+
+    added_message = f"Стоп слова добавлены: {', '.join(added_keywords)}" if added_keywords else ""
+    failed_message = f"Не удалось добавить стоп слова: {', '.join(failed_keywords)}" if failed_keywords else ""
+
+    result_message = "\n".join(filter(bool, [added_message, failed_message]))
+
+    await msg.reply(result_message)
+
+    # Очистка user_data для текущего пользователя
+    del user_data[msg.from_user.id]
+
+
 @dp.callback_query_handler(menu_cd.filter(action="add_keywords"))
 async def add_keywords_handler(query: CallbackQuery):
     await query.answer()
@@ -212,6 +252,30 @@ async def list_keywords_handler(query: CallbackQuery):
 async def back_to_groups_menu(query: CallbackQuery):
     text = "Меню взаимодействия с ключевыми словами"
     keyboard = await keywords_keyboard()
+    await query.message.edit_text(text, reply_markup=keyboard)
+    await query.answer()
+
+
+@dp.callback_query_handler(menu_cd.filter(action="list_blacklistkeywords"))
+async def list_keywords_handler(query: CallbackQuery):
+    await query.answer()
+    user_data[query.from_user.id] = "list_blacklistkeywords"
+    keywords = await get_user_blacklistkeywords(query.from_user.id)
+
+    if not keywords:
+        text = "У вас нет стоп слов."
+    else:
+        keyword_list = "\n".join(keywords)
+        text = f"Ваши стоп слова:\n{keyword_list}"
+
+    # Создаем клавиатуру с кнопкой "Назад"
+    back_markup = InlineKeyboardMarkup().add(InlineKeyboardButton("Назад", callback_data=menu_cd.new(action="back_list_blacklistkeywords")))
+    await query.message.edit_text(text, reply_markup=back_markup)
+    await query.answer()
+@dp.callback_query_handler(menu_cd.filter(action="back_list_blacklistkeywords"))
+async def back_to_groups_menu(query: CallbackQuery):
+    text = "Меню взаимодействия с стоп словами"
+    keyboard = await blacklistkeywords_keyboard()
     await query.message.edit_text(text, reply_markup=keyboard)
     await query.answer()
 #Обработчик команды вывода списка текущих групп пользователя
@@ -268,6 +332,38 @@ async def remove_handler(msg: types.Message):
 
     # Очистка user_data для текущего пользователя
     del user_data[msg.from_user.id]
+
+
+@dp.callback_query_handler(menu_cd.filter(action="remove_blacklistkeywords"))
+async def remove_keywords_handler(query: CallbackQuery):
+    await query.answer()
+    user_data[query.from_user.id] = "remove_blacklistkeywords"
+    await bot.send_message(chat_id=query.message.chat.id, text="Введите нежелательное слово, которое необходимо удалить, если их несколько разделите запятыми")
+
+@dp.message_handler(lambda message: message.text and message.from_user.id in user_data and user_data[message.from_user.id] == "remove_blacklistkeywords")
+async def remove_handler(msg: types.Message):
+    keywords = msg.text.split(', ')
+
+    removed_keywords = []
+    failed_keywords = []
+
+    for keyword in keywords:
+        keyword = keyword.strip()
+        if await remove_blacklistkeyword(msg.from_user.id, keyword):
+            removed_keywords.append(keyword)
+        else:
+            failed_keywords.append(keyword)
+
+    removed_message = f"Стоп слова удалены: {', '.join(removed_keywords)}" if removed_keywords else ""
+    failed_message = f"Не удалось удалить стоп слова: {', '.join(failed_keywords)}" if failed_keywords else ""
+
+    result_message = "\n".join(filter(bool, [removed_message, failed_message]))
+
+    await msg.reply(result_message)
+
+    # Очистка user_data для текущего пользователя
+    del user_data[msg.from_user.id]
+
 
 #Обработчик команды добавления в группу через поиск
 @dp.callback_query_handler(menu_cd.filter(action="join_group_by_search"))

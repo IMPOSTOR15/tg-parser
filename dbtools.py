@@ -13,6 +13,14 @@ async def init_db():
             )
         """)
         await db.execute("""
+            CREATE TABLE IF NOT EXISTS blacklistkeywords (
+                id INTEGER PRIMARY KEY,
+                user_id TEXT,
+                blacklistkeyword TEXT
+            )
+        """)
+        await db.commit()
+        await db.execute("""
             CREATE TABLE IF NOT EXISTS keywords (
                 id INTEGER PRIMARY KEY,
                 user_id TEXT,
@@ -80,6 +88,15 @@ async def add_keyword(user_id: int, keyword: str) -> bool:
             print(e)
             return False
 
+async def add_blacklistkeyword(user_id: int, blacklistkeyword: str) -> bool:
+    async with aiosqlite.connect("db.db") as db:
+        try:
+            await db.execute("INSERT INTO blacklistkeywords (user_id, blacklistkeyword) VALUES (?, ?)", (user_id, blacklistkeyword))
+            await db.commit()
+            return True
+        except Exception as e:
+            print(e)
+            return False
 #Получение из бд ключевых слов конкретного пользователя
 async def get_user_keywords(user_id):
     async with aiosqlite.connect("db.db") as db:
@@ -89,7 +106,15 @@ async def get_user_keywords(user_id):
             cursor = await db.execute("SELECT keyword FROM keywords WHERE user_id=?", (user_id,))
         keywords = await cursor.fetchall()
         return [k[0] for k in keywords]
-    
+
+async def get_user_blacklistkeywords(user_id):
+    async with aiosqlite.connect("db.db") as db:
+        if (user_id == 'all'):
+            cursor = await db.execute("SELECT blacklistkeyword FROM blacklistkeywords")
+        else:
+            cursor = await db.execute("SELECT blacklistkeyword FROM blacklistkeywords WHERE user_id=?", (user_id,))
+        blacklistkeywords = await cursor.fetchall()
+        return [k[0] for k in blacklistkeywords]
 #Удаление ключевого слова пользователя
 async def remove_keyword(user_id, keyword):
     async with aiosqlite.connect("db.db") as db:
@@ -97,6 +122,11 @@ async def remove_keyword(user_id, keyword):
         await db.commit()
         return cursor.rowcount > 0
 
+async def remove_blacklistkeyword(user_id, blacklistkeyword):
+    async with aiosqlite.connect("db.db") as db:
+        cursor = await db.execute("DELETE FROM blacklistkeywords WHERE user_id=? AND blacklistkeyword=?", (user_id, blacklistkeyword))
+        await db.commit()
+        return cursor.rowcount > 0
 #Запросы пользователей
 async def add_user(user_id, user_name, user_chat_id):
     async with aiosqlite.connect("db.db") as db:
