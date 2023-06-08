@@ -6,8 +6,8 @@ from telethon.sync import events
 from telethon.tl.functions.messages import ImportChatInviteRequest
 from datetime import timedelta
 import datetime
-from datetime import datetime as dt
-# import pytz
+from datetime import datetime
+import pytz
 from aditional_functions import notify_users, notify_users_for_listnere
 import asyncio
 from telethon.tl.functions.channels import GetParticipantRequest
@@ -37,25 +37,22 @@ class GroupsEventHandler:
         print('new msg')
         logging.info('new msg')
         keywords = await get_user_keywords(user_id)
+        moscow_tz = pytz.timezone('Europe/Moscow')
         keywords_lower = [keyword.lower() for keyword in keywords]
         blacklistkeywords = await get_user_blacklistkeywords(user_id)
         blacklistkeywords_lower = [blacklistkeyword.lower() for blacklistkeyword in blacklistkeywords]
         if event.text:
+            event.date = event.date.astimezone(moscow_tz).isoformat()
             msg_lower = event.text.lower()
+            print(msg_lower)
+            sender = await event.get_sender()
+            chat = await event.get_chat()
             for keyword in keywords_lower:
                 if keyword in msg_lower:
-                    if len(blacklistkeywords_lower) > 0:
-                        for blacklistkeyword in blacklistkeywords_lower:
-                            if not blacklistkeyword in msg_lower:
-                                sender = await event.get_sender()
-                                chat = await event.get_chat()
-                                await notify_users_for_listnere(bot, event, chat_id, sender.username, chat.title, keyword)
-                                print(f"[{chat.title}] {sender.first_name}: {event.text}")
-                                logging.info(f"[{chat.title}] {sender.first_name}: {event.text}")
-                                break
-                    else:
-                        sender = await event.get_sender()
-                        chat = await event.get_chat()
+                    blacklistkeyword_found = next((blacklistkeyword for blacklistkeyword in blacklistkeywords_lower if blacklistkeyword in msg_lower), None)
+                    await insert_messages([{'text': event.text, 'date': event.date, 'sender': sender.username}], 
+                                        chat.title, keyword, blacklistkeyword_found)
+                    if blacklistkeyword_found is None:
                         await notify_users_for_listnere(bot, event, chat_id, sender.username, chat.title, keyword)
                         print(f"[{chat.title}] {sender.first_name}: {event.text}")
                         logging.info(f"[{chat.title}] {sender.first_name}: {event.text}")

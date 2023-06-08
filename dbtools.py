@@ -1,12 +1,16 @@
 import datetime
 import aiosqlite
-
+from datetime import datetime, timedelta
+import pytz
+moscow_tz = pytz.timezone('Europe/Moscow')
 async def init_db():
     async with aiosqlite.connect("db.db") as db:
         await db.execute("""
             CREATE TABLE IF NOT EXISTS messages (
                 id INTEGER PRIMARY KEY,
                 text TEXT,
+                keyword TEXT,
+                blacklistkeyword TEXT,
                 date TEXT,
                 sender TEXT,
                 groupTitle TEXT
@@ -61,21 +65,51 @@ async def clean_db():
     await conn.close()
 
 #Запросы сообщений
-async def insert_messages(messages, groupTitle):
+async def insert_messages(messages, groupTitle, keyword, blacklistkeyword):
     async with aiosqlite.connect("db.db") as db:
         for message in messages:
             await db.execute("""
-                INSERT INTO messages (text, date, sender, groupTitle)
-                VALUES (?, ?, ?, ?)
-            """, (message['text'], message['date'], message['sender'], groupTitle))
+                INSERT INTO messages (text, keyword, blacklistkeyword, date, sender, groupTitle)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (message['text'], keyword, blacklistkeyword or "", message['date'], message['sender'], groupTitle))
         await db.commit()
 
 #Чтение сообщений из базы данных
-async def read_messages_from_db():
+async def read_messages_from_db(time_range):
+    now = datetime.now(moscow_tz)
+    if time_range == 'day':
+        start_time = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    elif time_range == 'week':
+        start_time = now - timedelta(days=7)
+    elif time_range == 'month':
+        start_time = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    else:
+        raise ValueError("Invalid time range")
+
+    start_time = start_time.isoformat()
+    end_time = now.isoformat()
+
+    query = "SELECT id, text, keyword, blacklistkeyword, date, sender, groupTitle FROM messages WHERE date BETWEEN ? AND ?"
+    params = [start_time, end_time]
+
     async with aiosqlite.connect("db.db") as db:
-        cursor = await db.execute("SELECT id, text, date, sender FROM messages")
-        messages = await cursor.fetchall()
-        return messages
+        cursor = await db.execute(query, params)
+        rows = await cursor.fetchall()
+
+    messages = [
+        {
+            "id": row[0],
+            "text": row[1],
+            "keyword": row[2],
+            "blacklistkeyword": row[3],
+            "date": row[4],
+            "sender": row[5],
+            "groupTitle": row[6]
+        }
+        for row in rows
+    ]
+
+    return messages
     
 #Запросы ключевых слов
 async def add_keyword(user_id: int, keyword: str) -> bool:

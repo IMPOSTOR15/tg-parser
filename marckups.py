@@ -11,7 +11,9 @@ async def help_keyboard():
     groups_button = InlineKeyboardButton("Группы", callback_data=menu_cd.new(action="groups"))
     scan_button = InlineKeyboardButton("Сканирование", callback_data=menu_cd.new(action="scan"))
     users_button = InlineKeyboardButton("Пользователи", callback_data=menu_cd.new(action="users"))
+    messages_button = InlineKeyboardButton("Выгрузка сообщений", callback_data=menu_cd.new(action="messages"))
     keyboard.add(keywords_button, blacklistkeywords_button, groups_button, scan_button, users_button)
+    keyboard.row(messages_button)
     return keyboard
 
 async def keywords_keyboard():
@@ -58,6 +60,16 @@ async def users_keyboard():
     keyboard.add(create_user_button)
     keyboard.add(back_button())
     return keyboard
+
+async def messages_keyboard():
+    keyboard = InlineKeyboardMarkup()
+    month_button = InlineKeyboardButton("За месяц", callback_data=menu_cd.new(action="month_messages"))
+    week_button = InlineKeyboardButton("За 7 дней", callback_data=menu_cd.new(action="week__messages"))
+    day_button = InlineKeyboardButton("За сутки", callback_data=menu_cd.new(action="day_messages"))
+    keyboard.add(day_button, week_button, month_button)
+    keyboard.add(back_button())
+    return keyboard
+
 
 async def back_keyboard():
     return InlineKeyboardMarkup().add(back_button())

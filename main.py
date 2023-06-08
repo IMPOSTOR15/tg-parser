@@ -22,7 +22,8 @@ from aiogram.dispatcher.filters import Text
 from aiogram.types import ParseMode
 from aiogram.utils.markdown import text, quote_html
 import logging
-
+# Импорты pandas
+import pandas as pd
 #Организационные функции
 from dbtools import *
 from parser_funcs import *
@@ -84,6 +85,13 @@ menu_cd = CallbackData("menu", "action")
 async def show_keywords_menu(query: CallbackQuery):
     text = "Меню взаимодействия с ключевыми словами"
     keyboard = await keywords_keyboard()
+    await query.message.edit_text(text, reply_markup=keyboard)
+    await query.answer()
+
+@dp.callback_query_handler(menu_cd.filter(action="messages"))
+async def show_keywords_menu(query: CallbackQuery):
+    text = "Выберите необходимый временной интервал"
+    keyboard = await messages_keyboard()
     await query.message.edit_text(text, reply_markup=keyboard)
     await query.answer()
 
@@ -363,8 +371,30 @@ async def remove_handler(msg: types.Message):
 
     # Очистка user_data для текущего пользователя
     del user_data[msg.from_user.id]
+# Обработчик выгрузки в exel
+@dp.callback_query_handler(menu_cd.filter(action=["month_messages", "week__messages", "day_messages"]))
+async def send_messages_report(query: CallbackQuery, callback_data: dict):
+    action = callback_data.get("action")
 
+    time_range = action.replace("_messages", "")
 
+    # Получите сообщения из базы данных
+    messages = await read_messages_from_db(time_range)
+    
+    # Запишите сообщения в файл Excel
+    filename = f"{query.from_user.id}_{time_range}_messages.xlsx"
+    
+    df = pd.DataFrame(messages)
+    df.to_excel(filename, index=False)
+    
+    # Отправьте файл пользователю
+    with open(filename, 'rb') as file:
+        await query.message.answer_document(file)
+
+    # Удалите файл
+    os.remove(filename)
+    
+    await query.answer()
 #Обработчик команды добавления в группу через поиск
 @dp.callback_query_handler(menu_cd.filter(action="join_group_by_search"))
 async def join_group_by_search_handler(query: CallbackQuery):
