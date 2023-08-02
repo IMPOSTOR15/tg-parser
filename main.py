@@ -3,10 +3,9 @@ from dotenv import load_dotenv
 import os
 import asyncio
 import traceback
+
 #Импорты thelethon парсера
-from telethon.tl.functions.channels import JoinChannelRequest
-from telethon.tl.types import InputPeerChannel
-from telethon import TelegramClient, errors
+from telethon import TelegramClient
 
 #Импорты aiogram бота
 import aiogram
@@ -15,20 +14,20 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.types import CallbackQuery
 from aiogram.dispatcher.filters import Command
 from aiogram.utils.callback_data import CallbackData
-from aiogram.contrib.middlewares.logging import LoggingMiddleware
-from aiogram.dispatcher.filters.state import State, StatesGroup
-from aiogram.dispatcher import FSMContext
-from aiogram.dispatcher.filters import Text
-from aiogram.types import ParseMode
-from aiogram.utils.markdown import text, quote_html
 import logging
-# Импорты pandas
-import pandas as pd
+
 #Организационные функции
 from dbtools import *
 from parser_funcs import *
 from aditional_functions import *
 from marckups import *
+
+import pandas as pd
+import os
+
+#Импорт функций для хэндлеров
+from templates_handlers import *
+
 #Загрузка переменных окружения
 load_dotenv()
 
@@ -36,16 +35,20 @@ load_dotenv()
 api_id = os.environ.get('API_ID')
 api_hash = os.environ.get('API_HASH')
 phone = os.environ.get('PHONE')
-client = TelegramClient(phone, api_id, api_hash)
+
+current_client = TelegramClient(phone, api_id, api_hash)
 
 # Переменные бота
 bot_token = os.environ.get('BOT_TOKEN')
 bot = Bot(token=bot_token)
 dp = Dispatcher(bot)
+print(dp)
+
 
 #Глобальные переменные
 going_tasks = {}
 user_data = {}
+
 #Список доступных команд
 available_commands = [
     #Команды бота
@@ -85,6 +88,13 @@ menu_cd = CallbackData("menu", "action")
 async def show_keywords_menu(query: CallbackQuery):
     text = "Меню взаимодействия с ключевыми словами"
     keyboard = await keywords_keyboard()
+    await query.message.edit_text(text, reply_markup=keyboard)
+    await query.answer()
+
+@dp.callback_query_handler(menu_cd.filter(action="templates"))
+async def show_templates_menu(query: CallbackQuery):
+    text = "Меню взаимодействия с шаблонами"
+    keyboard = await templates_keyboard()
     await query.message.edit_text(text, reply_markup=keyboard)
     await query.answer()
 
@@ -133,6 +143,7 @@ async def back_to_main_menu(query: CallbackQuery):
     keyboard = await help_keyboard()
     await query.message.edit_text(text, reply_markup=keyboard)
     await query.answer()
+    
 @dp.message_handler(Command('menu'))
 async def cmd_help(message: types.Message):
     help_text = "Меню взаимодействия"
@@ -173,383 +184,41 @@ async def process_inline_answer(callback_query: aiogram.types.CallbackQuery):
 
     await bot.answer_callback_query(callback_query.id)
 
-#Обработчик команды добавления ключевого слова
-@dp.callback_query_handler(menu_cd.filter(action="add_blacklistkeywords"))
-async def add_keywords_handler(query: CallbackQuery):
-    await query.answer()
-    user_data[query.from_user.id] = "add_blacklistkeywords"
-    print(user_data)
-    logging.info(user_data)
-    await bot.send_message(chat_id=query.message.chat.id, text="Введите ключевое слово или фразу, которое необходимо добавить, если их несколько разделите запятыми")
 
-@dp.message_handler(lambda message: message.text and message.from_user.id in user_data and user_data[message.from_user.id] == "add_blacklistkeywords")
-async def add_blacklistkeywords(msg: types.Message):
-    blacklistkeywords = msg.text.split(', ')
+template_event_handler = GroupsEventHandler(current_client, bot)
 
-    added_keywords = []
-    failed_keywords = []
-
-    for keyword in blacklistkeywords:
-        keyword = keyword.strip()
-        if await add_blacklistkeyword(msg.from_user.id, keyword):
-            added_keywords.append(keyword)
-        else:
-            failed_keywords.append(keyword)
-
-    added_message = f"Стоп слова добавлены: {', '.join(added_keywords)}" if added_keywords else ""
-    failed_message = f"Не удалось добавить стоп слова: {', '.join(failed_keywords)}" if failed_keywords else ""
-
-    result_message = "\n".join(filter(bool, [added_message, failed_message]))
-
-    await msg.reply(result_message)
-
-    # Очистка user_data для текущего пользователя
-    del user_data[msg.from_user.id]
-
-
-@dp.callback_query_handler(menu_cd.filter(action="add_keywords"))
-async def add_keywords_handler(query: CallbackQuery):
-    await query.answer()
-    user_data[query.from_user.id] = "add_keywords"
-    print(user_data)
-    logging.info(user_data)
-    await bot.send_message(chat_id=query.message.chat.id, text="Введите ключевое слово или фразу, которое необходимо добавить, если их несколько разделите запятыми")
-
-@dp.message_handler(lambda message: message.text and message.from_user.id in user_data and user_data[message.from_user.id] == "add_keywords")
-async def add_keywords(msg: types.Message):
-    keywords = msg.text.split(', ')
-
-    added_keywords = []
-    failed_keywords = []
-
-    for keyword in keywords:
-        keyword = keyword.strip()
-        if await add_keyword(msg.from_user.id, keyword):
-            added_keywords.append(keyword)
-        else:
-            failed_keywords.append(keyword)
-
-    added_message = f"Ключевые слова добавлены: {', '.join(added_keywords)}" if added_keywords else ""
-    failed_message = f"Не удалось добавить ключевые слова: {', '.join(failed_keywords)}" if failed_keywords else ""
-
-    result_message = "\n".join(filter(bool, [added_message, failed_message]))
-
-    await msg.reply(result_message)
-
-    # Очистка user_data для текущего пользователя
-    del user_data[msg.from_user.id]
-
-#Обработчик команды вывода списка ключевых слов
-@dp.callback_query_handler(menu_cd.filter(action="list_keywords"))
-async def list_keywords_handler(query: CallbackQuery):
-    await query.answer()
-    user_data[query.from_user.id] = "list_keywords"
-    keywords = await get_user_keywords(query.from_user.id)
-
-    if not keywords:
-        text = "У вас нет ключевых слов. Добавьте их с помощью команды /add_keywords"
-    else:
-        keyword_list = "\n".join(keywords)
-        text = f"Ваши ключевые слова:\n{keyword_list}"
-
-    # Создаем клавиатуру с кнопкой "Назад"
-    back_markup = InlineKeyboardMarkup().add(InlineKeyboardButton("Назад", callback_data=menu_cd.new(action="back_list_keywords")))
-    await query.message.edit_text(text, reply_markup=back_markup)
-    await query.answer()
-@dp.callback_query_handler(menu_cd.filter(action="back_list_keywords"))
-async def back_to_groups_menu(query: CallbackQuery):
-    text = "Меню взаимодействия с ключевыми словами"
-    keyboard = await keywords_keyboard()
-    await query.message.edit_text(text, reply_markup=keyboard)
-    await query.answer()
-
-
-@dp.callback_query_handler(menu_cd.filter(action="list_blacklistkeywords"))
-async def list_keywords_handler(query: CallbackQuery):
-    await query.answer()
-    user_data[query.from_user.id] = "list_blacklistkeywords"
-    keywords = await get_user_blacklistkeywords(query.from_user.id)
-
-    if not keywords:
-        text = "У вас нет стоп слов."
-    else:
-        keyword_list = "\n".join(keywords)
-        text = f"Ваши стоп слова:\n{keyword_list}"
-
-    # Создаем клавиатуру с кнопкой "Назад"
-    back_markup = InlineKeyboardMarkup().add(InlineKeyboardButton("Назад", callback_data=menu_cd.new(action="back_list_blacklistkeywords")))
-    await query.message.edit_text(text, reply_markup=back_markup)
-    await query.answer()
-@dp.callback_query_handler(menu_cd.filter(action="back_list_blacklistkeywords"))
-async def back_to_groups_menu(query: CallbackQuery):
-    text = "Меню взаимодействия с стоп словами"
-    keyboard = await blacklistkeywords_keyboard()
-    await query.message.edit_text(text, reply_markup=keyboard)
-    await query.answer()
-#Обработчик команды вывода списка текущих групп пользователя
-@dp.callback_query_handler(menu_cd.filter(action="list_groups"))
-async def list_handler(query: CallbackQuery):
-    groups = await get_user_group_list(query.from_user.id)
-    print(groups)
-    logging.info(groups)
-    if not groups:
-        text = "У вас нет добавленных групп."
-    else:
-        groups_list = ""
-        for group in groups:
-           groups_list += f"`{group[0]}` {group[1]}\n"
-        text = f"Ваши добавленные группы:\n{groups_list}"
-
-    back_keyboard = InlineKeyboardMarkup().add(InlineKeyboardButton("Назад", callback_data=menu_cd.new(action="back_list_groups")))
-    await query.message.edit_text(text, reply_markup=back_keyboard, parse_mode="Markdown")
-    await query.answer()
-@dp.callback_query_handler(menu_cd.filter(action="back_list_groups"))
-async def back_to_groups_menu(query: CallbackQuery):
-    text = "Меню взаимодействия с группами"
-    keyboard = await groups_keyboard()
-    await query.message.edit_text(text, reply_markup=keyboard)
-    await query.answer()
-
-#Обработчик команды удаления ключевого слова
-@dp.callback_query_handler(menu_cd.filter(action="remove_keywords"))
-async def remove_keywords_handler(query: CallbackQuery):
-    await query.answer()
-    user_data[query.from_user.id] = "remove_keywords"
-    await bot.send_message(chat_id=query.message.chat.id, text="Введите ключевое слово, которое необходимо удалить, если их несколько разделите запятыми")
-
-@dp.message_handler(lambda message: message.text and message.from_user.id in user_data and user_data[message.from_user.id] == "remove_keywords")
-async def remove_handler(msg: types.Message):
-    keywords = msg.text.split(', ')
-
-    removed_keywords = []
-    failed_keywords = []
-
-    for keyword in keywords:
-        keyword = keyword.strip()
-        if await remove_keyword(msg.from_user.id, keyword):
-            removed_keywords.append(keyword)
-        else:
-            failed_keywords.append(keyword)
-
-    removed_message = f"Ключевые слова удалены: {', '.join(removed_keywords)}" if removed_keywords else ""
-    failed_message = f"Не удалось удалить ключевые слова: {', '.join(failed_keywords)}" if failed_keywords else ""
-
-    result_message = "\n".join(filter(bool, [removed_message, failed_message]))
-
-    await msg.reply(result_message)
-
-    # Очистка user_data для текущего пользователя
-    del user_data[msg.from_user.id]
-
-
-@dp.callback_query_handler(menu_cd.filter(action="remove_blacklistkeywords"))
-async def remove_keywords_handler(query: CallbackQuery):
-    await query.answer()
-    user_data[query.from_user.id] = "remove_blacklistkeywords"
-    await bot.send_message(chat_id=query.message.chat.id, text="Введите нежелательное слово, которое необходимо удалить, если их несколько разделите запятыми")
-
-@dp.message_handler(lambda message: message.text and message.from_user.id in user_data and user_data[message.from_user.id] == "remove_blacklistkeywords")
-async def remove_handler(msg: types.Message):
-    keywords = msg.text.split(', ')
-
-    removed_keywords = []
-    failed_keywords = []
-
-    for keyword in keywords:
-        keyword = keyword.strip()
-        if await remove_blacklistkeyword(msg.from_user.id, keyword):
-            removed_keywords.append(keyword)
-        else:
-            failed_keywords.append(keyword)
-
-    removed_message = f"Стоп слова удалены: {', '.join(removed_keywords)}" if removed_keywords else ""
-    failed_message = f"Не удалось удалить стоп слова: {', '.join(failed_keywords)}" if failed_keywords else ""
-
-    result_message = "\n".join(filter(bool, [removed_message, failed_message]))
-
-    await msg.reply(result_message)
-
-    # Очистка user_data для текущего пользователя
-    del user_data[msg.from_user.id]
-# Обработчик выгрузки в exel
-@dp.callback_query_handler(menu_cd.filter(action=["month_messages", "week__messages", "day_messages"]))
-async def send_messages_report(query: CallbackQuery, callback_data: dict):
-    action = callback_data.get("action")
-
-    time_range = action.replace("_messages", "")
-
-    # Получите сообщения из базы данных
-    messages = await read_messages_from_db(time_range)
-    
-    # Запишите сообщения в файл Excel
-    filename = f"{query.from_user.id}_{time_range}_messages.xlsx"
-    
-    df = pd.DataFrame(messages)
-    df.to_excel(filename, index=False)
-    
-    # Отправьте файл пользователю
-    with open(filename, 'rb') as file:
-        await query.message.answer_document(file)
-
-    # Удалите файл
-    os.remove(filename)
-    
-    await query.answer()
-#Обработчик команды добавления в группу через поиск
-@dp.callback_query_handler(menu_cd.filter(action="join_group_by_search"))
-async def join_group_by_search_handler(query: CallbackQuery):
-    await query.answer()
-    user_data[query.from_user.id] = "join_group_by_search"
-    await bot.send_message(chat_id=query.message.chat.id, text="Введите поисковой запрос.")
-
-@dp.message_handler(lambda message: user_data.get(message.from_user.id) == "join_group_by_search")
-async def add_group_handler(msg: types.Message):
-    group_name = msg.text
-    if group_name == '':
-        await msg.reply("Пожалуйста, укажите название группы.")
-    else:
-        groups = await search_group_not_joined(client, group_name)
-        if not groups:
-            await msg.reply(f"Группа '{group_name}' не найдена.")
-        elif len(groups) == 1:
-            group = groups[0]
-            group_id = group.id
-            group_title = group.title
-            add_by_userid = msg.from_user.id
-            
-            # Проверка на дублирование группы
-            all_groups = await get_all_group_list()
-            if any(existing_group[0] == group_id for existing_group in all_groups):
-                await msg.reply(f"Группа '{group_title}' (ID {group_id}) уже добавлена.")
-            else:
-                await add_group(group_id, group_title, add_by_userid)
-                await msg.reply(f"Группа '{group_title}' (ID {group_id}) успешно добавлена")
-        else:
-            buttons = []
-            for group in groups:
-                buttons.append(aiogram.types.InlineKeyboardButton(text=group.title, callback_data=f"add_group_{group.id}"))
-            markup = aiogram.types.InlineKeyboardMarkup(row_width=1)
-            markup.add(*buttons)
-            await msg.reply(f"Найдено несколько групп с названием '{group_name}'. Выберите нужную группу из списка ниже:", reply_markup=markup)
-        
-        # Очищаем состояние пользователя после обработки запроса
-        del user_data[msg.from_user.id]
-
-@dp.callback_query_handler(menu_cd.filter(action="join_group_by_link"))
-async def join_group_by_link_handler(query: CallbackQuery):
-    await query.answer()
-    user_data[query.from_user.id] = "join_group_by_link"
-    await bot.send_message(chat_id=query.message.chat.id, text="Пришлите ссылку, если ссылок несколько, разделите их запятыми. (Не стоит пытаться использовать более пяти ссылок чаще чем в 5-30 минут)")
-
-# Обработчик присоединения к группам по ссылкам
-@dp.message_handler(lambda message: message.text and message.from_user.id in user_data and user_data[message.from_user.id] == "join_group_by_link")
-async def process_group_links(message: types.Message):
-    links = message.text.split(', ')
-    
-    success_count = 0
-    errors = []
-
-    for link in links:
-        link = link.strip()
-        try:
-            is_joined = await joinGroupByLink(client, link, message.from_user.id, bot, message.chat.id)
-        except Exception as e:
-            continue
-        if is_joined:
-            success_count += 1
-        else:
-            errors.append(link)
-
-    success_message = f"Вы успешно присоединились к {success_count} группе(-ам)" if success_count > 0 else ""
-    error_message = f"Следующие ссылки некорректны или истекли: {', '.join(errors)}" if errors else ""
-
-    result_message = "\n".join(filter(bool, [success_message, error_message]))
-
-    # Удаляем состояние пользователя после выполнения
-    user_data.pop(message.from_user.id, None)
-
-    await message.reply(result_message)
-
-# Обработчик нажатия кнопки "Удалить" в меню групп
-@dp.callback_query_handler(menu_cd.filter(action="remove_groups"))
-async def remove_handler(query: CallbackQuery):
-    await query.answer()
-    user_data[query.from_user.id] = "remove_groups"
-    await bot.send_message(chat_id=query.message.chat.id, text="Отправьте id группы, которую необходимо удалить. Если групп несколько, отправьте списком, разделяя пробелами.")
-
-# Обработчик удаления групп по id
-@dp.message_handler(lambda message: message.from_user.id in user_data and user_data[message.from_user.id] == "remove_groups")
-async def process_group_ids_to_remove(message: types.Message):
-    # Сброс состояния пользователя
-    user_data.pop(message.from_user.id, None)
-    
-    group_ids = message.text.split(', ')
-
-    # Получаем список всех групп пользователя
-    all_user_groups = await get_user_group_list(message.from_user.id)
-
-    # Получаем только id групп из списка всех групп пользователя
-    user_group_ids = [str(group[0]) for group in all_user_groups]
-
-    # Сравниваем id групп пользователя с id групп, которые отправил пользователь
-    groups_to_remove = []
-    invalid_group_ids = []
-
-    for group_id in group_ids:
-        group_id = group_id.strip()
-        if group_id in user_group_ids:
-            groups_to_remove.append(group_id)
-        else:
-            invalid_group_ids.append(group_id)
-
-    # Удаляем группы и формируем сообщения о результате
-    if groups_to_remove:
-        for group_id in groups_to_remove:
-            await remove_group(message.from_user.id, group_id)
-        removed_message = "Группы удалены успешно."
-    else:
-        removed_message = ""
-
-    if invalid_group_ids:
-        invalid_message = f"Проверьте данные, следующие id групп не найдены: {', '.join(invalid_group_ids)}"
-    else:
-        invalid_message = ""
-
-    result_message = "\n".join(filter(bool, [removed_message, invalid_message]))
-
-    await message.reply(result_message)
-
-event_handler = GroupsEventHandler(client, bot)
-
-#Обработчик команды запуска сканирования
-@dp.callback_query_handler(menu_cd.filter(action="selective_scan"))
+#Обработчик команды запуска сканирования шаблона
+@dp.callback_query_handler(menu_cd.filter(action="selective_scan_template"))
 async def add_start_scan__handler(callback_query: CallbackQuery):
     user_id = callback_query.from_user.id
     chat_id = callback_query.message.chat.id
     markup = aiogram.types.InlineKeyboardMarkup(row_width=1)
     markup.add(back_button())
 
-    userGroupList = await get_user_group_list(user_id)
+    selected_teplate_id = await find_selected_template(user_id)
+    templateGroupList = await get_template_group_list(selected_teplate_id[0])
+    # userGroupList = await get_user_group_list(user_id)
 
     groupArr = []
     groupIdArr = []
 
-    for group in userGroupList:
+    for group in templateGroupList:
         groupArr.append({'chat_id': group[0], 'chat_name': group[1]})
         groupIdArr.append(int(group[0]))
 
     if (len(groupArr) > 0):
 
-        print(event_handler.stop_listening)
-        logging.info(event_handler.stop_listening)
-        if (event_handler.stop_listening == True):
-            event_handler.start_handler()
+        print(template_event_handler.stop_listening)
+        logging.info(template_event_handler.stop_listening)
+        if (template_event_handler.stop_listening == True):
+            template_event_handler.start_handler()
             msg_text = "Запущенно сканирование следующих групп: \n"
             await callback_query.message.edit_text("Ожидайте....")
             logging.info(groupIdArr)
+            print(groupIdArr)
             for id in groupIdArr:
                 logging.info("get_group_by_id")
-                selected_group = await get_group_by_id(int(id), client)
+                selected_group = await get_group_by_id(int(id), current_client)
                 if (selected_group == 'Это приватный чат, или бота прогнали'):
                     await bot.send_message(chat_id=chat_id, text=f"Возможно бота прогнали из группы {id}")
                     groupIdArr.remove(id)
@@ -557,7 +226,7 @@ async def add_start_scan__handler(callback_query: CallbackQuery):
             try:
                 print("Попытка создать Экземпляр")
                 logging.info("Попытка создать Экземпляр")
-                event_handler.create_groups_event_handler(groupIdArr, user_id, chat_id)
+                await template_event_handler.create_template_groups_event_handler(groupIdArr, chat_id, selected_teplate_id[0])
                 for group in groupArr:
                     msg_text += f"{group['chat_name']} id: {group['chat_id']}\n"
                 await callback_query.message.edit_text(msg_text, reply_markup=markup)
@@ -572,16 +241,16 @@ async def add_start_scan__handler(callback_query: CallbackQuery):
             await callback_query.message.edit_text('Сканирование уже запущенно', reply_markup=markup)
 
     else:
-        await callback_query.message.edit_text(f"У вас нет добавленных групп", reply_markup=markup)
+        await callback_query.message.edit_text(f"У вас нет добавленных групп в шаблоне", reply_markup=markup)
 
 #Обработчик команды остановки сканирования
-@dp.callback_query_handler(menu_cd.filter(action="selective_stop"))
+@dp.callback_query_handler(menu_cd.filter(action="selective_stop_template"))
 async def add_stop_scan__handler(query: CallbackQuery):
     markup = aiogram.types.InlineKeyboardMarkup(row_width=1)
     markup.add(back_button())
     try:
-        if (event_handler.stop_listening == False):
-            event_handler.stop_handler()
+        if (template_event_handler.stop_listening == False):
+            template_event_handler.stop_handler()
             await query.message.edit_text(text="Все задачи сканирования остановленны", reply_markup = await back_keyboard())
         else:
             await query.message.edit_text(text="Нет активных задач для остановки", reply_markup = await back_keyboard())
@@ -593,21 +262,164 @@ async def add_stop_scan__handler(query: CallbackQuery):
         traceback.print_exc()            
         await query.message.edit_text(text="Ошибка остановки сканирования", reply_markup = await back_keyboard())
 
+template_cd = CallbackData("template", "template_id", "action")
+
 #Обработчик получения команды без обработчика
 @dp.message_handler(commands=['unknown_command'], commands_prefix='/', regexp='^/')
 async def cmd_unknown(message: types.Message):
     await message.reply("К сожалению, я не знаю такой команды. Попробуйте /help для списка доступных команд.")
 
+@dp.callback_query_handler(menu_cd.filter(action="add_template"))
+async def process_add_templates_handler(query: CallbackQuery, **kwargs):
+    await add_templates_handler(query, user_data, bot, **kwargs)
+
+@dp.message_handler(lambda message: message.text and message.from_user.id in user_data and user_data[message.from_user.id] == "add_template")
+async def process_add_templatesr(msg: types.Message, **kwargs):
+    await add_templates(msg, user_data, **kwargs)
+
+@dp.callback_query_handler(menu_cd.filter(action="show_templates_button"))
+async def process_show_templates(query: CallbackQuery, **kwargs):
+    await show_templates_handler(query, bot, **kwargs)
+
+@dp.callback_query_handler(menu_cd.filter(action="remove_template"))
+async def process_delete_templates_handler(query: CallbackQuery, **kwargs):
+    await delete_templates_handler(query, bot, **kwargs)
+
+@dp.callback_query_handler(template_cd.filter(action="delete_template_button"))
+async def process_edit_template_handler(query: CallbackQuery, callback_data: dict, **kwargs):
+    await edit_template_handler(query, callback_data, user_data, bot, **kwargs)
+
+@dp.callback_query_handler(template_cd.filter(action="edit_template_button"))
+async def process_edit_template_handler(query: CallbackQuery, callback_data: dict, **kwargs):
+    await edit_template_handler(query, callback_data, user_data, bot, **kwargs)
+
+#Выбор шаблона
+@dp.callback_query_handler(template_cd.filter(action="select_template"))
+async def process_select_template_handler(query: CallbackQuery, callback_data: dict, **kwargs):
+    await select_template_handler(query, callback_data, bot, **kwargs)
+
+#Меню управления группами
+@dp.callback_query_handler(template_cd.filter(action="groups_from_tamplate"))
+async def process_groups_from_tamplate(query: CallbackQuery, callback_data: dict, **kwargs):
+    await groups_from_tamplate(query, callback_data,  user_data, bot, **kwargs)
+
+#Список групп шаблона
+@dp.callback_query_handler(template_cd.filter(action="list_groups_template"))
+async def process_list_groups_templater(query: CallbackQuery, callback_data: dict, **kwargs):
+    await list_groups_template(query, callback_data, **kwargs)
+
+# Обработчик удаления групп по id из шаблона
+@dp.callback_query_handler(template_cd.filter(action="remove_group"))
+async def process_remove_group_template(query: CallbackQuery, callback_data: dict, **kwargs):
+    await remove_group_template(query, callback_data, user_data, bot, **kwargs)
+
+@dp.message_handler(lambda message: message.from_user.id in user_data and user_data[message.from_user.id] == "remove_group")
+async def process_group_ids_to_remove_template(message: types.Message, **kwargs):
+    await group_ids_to_remove_template(message, user_data, **kwargs)
+
+# Обработчик присоединения к группам по ссылкам
+@dp.callback_query_handler(template_cd.filter(action="add_groups_link"))
+async def process_join_group_by_link_template(query: CallbackQuery, callback_data: dict, **kwargs):
+    await join_group_by_link_template(query, callback_data, user_data, bot, **kwargs)
+
+@dp.message_handler(lambda message: message.text and message.from_user.id in user_data and user_data[message.from_user.id] == "add_groups_link")
+async def process_join_group_by_link_handler_template(message: types.Message, **kwargs):
+    await join_group_by_link_handler_template(message, user_data, bot, current_client, **kwargs)
+
+#Обработчик команды добавления в группу через поиск
+@dp.callback_query_handler(template_cd.filter(action="add_groups_search"))
+async def process_join_group_by_search_handler_template(query: CallbackQuery, callback_data: dict, **kwargs):
+    await join_group_by_search_handler_template(query, callback_data, user_data, bot, **kwargs)
+
+@dp.message_handler(lambda message: user_data.get(message.from_user.id, {}).get('state') == "join_group_by_search_template")
+async def process_join_group_by_search_handler_template_msg(msg: types.Message, **kwargs):
+    await join_group_by_search_handler_template_msg(msg, user_data, current_client,  **kwargs)
+
+@dp.callback_query_handler(lambda call: call.data.startswith('addGroup'))
+async def process_process_add_group_button(call: aiogram.types.CallbackQuery, **kwargs):
+    await process_add_group_button(call, current_client, **kwargs)
+
+#Список ключевых слов шаблона
+@dp.callback_query_handler(template_cd.filter(action="list_keywords_from_tamplate"))
+async def process_list_keywords_handler_template(query: CallbackQuery, callback_data: dict, **kwargs):
+    await list_keywords_handler_template(query, callback_data, **kwargs)
+
+#Список слов-исключений шаблона
+@dp.callback_query_handler(template_cd.filter(action="list_stopkeywords_from_tamplate"))
+async def process_list_stopwords_handler_tamplate(query: CallbackQuery, callback_data: dict, **kwargs):
+    await list_stopwords_handler_tamplate(query, callback_data, **kwargs)
+
+#Добавление ключевых слов
+@dp.callback_query_handler(template_cd.filter(action="add_keywords_to_tamplate"))
+async def process_add_keywords_to_tamplate_handler(query: CallbackQuery, callback_data: dict, **kwargs):
+    await add_keywords_to_tamplate_handler(query, callback_data, user_data, bot, **kwargs)
+
+@dp.message_handler(lambda message: message.text and message.from_user.id in user_data and "add_keywords_template" in user_data[message.from_user.id])
+async def process_add_keywords_to_tamplate_msg(msg: types.Message, **kwargs):
+    await add_keywords_to_tamplate_msg(msg, user_data, bot, **kwargs)
+
+#Добавление слов-исключений
+@dp.callback_query_handler(template_cd.filter(action="add_stopwords_to_tamplate"))
+async def process_add_blacklistkeyword_to_tamplate_handler(query: CallbackQuery, callback_data: dict, **kwargs):
+    await add_blacklistkeyword_to_tamplate_handler(query, callback_data, user_data, bot, **kwargs)
+
+@dp.message_handler(lambda message: message.text and message.from_user.id in user_data and "add_blacklistkeyword_template" in user_data[message.from_user.id])
+async def process_add_blacklistkeywords_to_tamplate(msg: types.Message, **kwargs):
+    await add_blacklistkeywords_to_tamplate(msg, user_data, bot, **kwargs)
+
+#Удаление ключевых слов из шаблона
+@dp.callback_query_handler(template_cd.filter(action="remove_keywords_from_tamplate"))
+async def process_remove_keywords_from_tamplate_handler(query: CallbackQuery, callback_data: dict, **kwargs):
+    await remove_keywords_from_tamplate_handler(query, callback_data, user_data, bot, **kwargs)
+
+@dp.message_handler(lambda message: message.text and message.from_user.id in user_data and "remove_keywords_template" in user_data[message.from_user.id])
+async def process_remove_keywords_from_tamplate(msg: types.Message, **kwargs):
+    await remove_keywords_from_tamplate(msg, user_data, bot, **kwargs)
+
+#Удаление слов-исключений из шаблона
+@dp.callback_query_handler(template_cd.filter(action="remove_stopwords_from_tamplate"))
+async def process_remove_blacklistkeywords_from_template_handler(query: CallbackQuery, callback_data: dict, **kwargs):
+    await remove_blacklistkeywords_from_template_handler(query, callback_data, user_data, bot, **kwargs)
+
+@dp.message_handler(lambda message: message.text and message.from_user.id in user_data and "remove_blacklistkeyword_template" in user_data[message.from_user.id])
+async def process_blacklistkeywords_from_template(msg: types.Message, **kwargs):
+    await remove_blacklistkeywords_from_template(msg, user_data, bot, **kwargs)
+
+print("templates handlers registered")
+
+
+# Обработчик выгрузки в exel
+@dp.callback_query_handler(menu_cd.filter(action=["month_messages", "week_messages", "day_messages"]))
+async def send_messages_report(query: CallbackQuery, callback_data: dict):
+    action = callback_data.get("action")
+    time_range = action.replace("_messages", "")
+    # Получите сообщения из базы данных
+    messages = await read_messages_from_db(time_range)
+    # Запишите сообщения в файл Excel
+    filename = f"{query.from_user.id}_{time_range}_messages.xlsx"
+    df = pd.DataFrame(messages)
+    df.to_excel(filename, index=False)
+    # Отправьте файл пользователю
+    with open(filename, 'rb') as file:
+        await query.message.answer_document(file)
+    # Удалите файл
+    os.remove(filename)
+    await query.answer()
+print("excel handlers registered")
+
 
 async def main():
     await init_db()
-    
+    await current_client.start()
+
     aiogram_task = asyncio.create_task(dp.start_polling())
-    await client.start()
+    
     print("Telethon started")
     logging.info("Telethon started")
 
-    await asyncio.gather(client.run_until_disconnected(), aiogram_task)
+    await asyncio.gather(current_client.run_until_disconnected(), aiogram_task)
+    
+    
 
 if __name__ == '__main__':
     asyncio.run(main())

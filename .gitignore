@@ -1,9 +1,12 @@
-__pycache__/
 *.session
 *.session-journal
 *.env
 venv
-docker-compose.yml
+Inculde
+__pycache__
+Lib
+Scripts
 db.db
-*.rar
-*.json
+pyvenv.cfg
+*.docx
+*.service

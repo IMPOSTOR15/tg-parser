@@ -1,26 +1,22 @@
 #Импорты тг-парсера и общие импорты
-import telethon
-from telethon import TelegramClient, errors, functions, types, client
+import sqlite3
+import time
+from telethon import errors, functions
 from telethon.sync import events
 
-from telethon.tl.functions.messages import ImportChatInviteRequest
-from datetime import timedelta
-import datetime
-from datetime import datetime
 import pytz
-from aditional_functions import notify_users, notify_users_for_listnere
+from aditional_functions import notify_users_for_listnere
 import asyncio
 from telethon.tl.functions.channels import GetParticipantRequest
 from telethon.tl.types import ChannelParticipantSelf
 from telethon.errors import (
     UserNotParticipantError,
     ChannelPrivateError,
-    ChatAdminRequiredError
+    ChatAdminRequiredError,
+    FloodWaitError
 )
-from telethon.tl.functions.channels import GetFullChannelRequest, GetParticipantsRequest
-from telethon.tl.types import InputPeerChannel
 from dbtools import *
-from telethon.tl.types import PeerUser, PeerChat, PeerChannel
+from telethon.tl.types import PeerChat, PeerChannel
 import logging
 
 class GroupsEventHandler:
@@ -30,43 +26,46 @@ class GroupsEventHandler:
         self.stop_listening = True
         self.isHandlerAlreadySatisfy = False
         self.mainHandler = None
-
-    async def message_handler(self, event, user_id, chat_id, bot):
+    
+    async def template_message_handler(self, event, chat_id, template_id):
         if self.stop_listening:
             return
-        print('new msg')
+        print("new msg")
         logging.info('new msg')
-        keywords = await get_user_keywords(user_id)
+        keywords = await get_keywords_by_template_id(template_id)
         moscow_tz = pytz.timezone('Europe/Moscow')
         keywords_lower = [keyword.lower() for keyword in keywords]
-        blacklistkeywords = await get_user_blacklistkeywords(user_id)
+        blacklistkeywords = await get_stopwords_by_template_id(template_id)
         blacklistkeywords_lower = [blacklistkeyword.lower() for blacklistkeyword in blacklistkeywords]
         if event.text:
             event.date = event.date.astimezone(moscow_tz).isoformat()
             msg_lower = event.text.lower()
-            print(msg_lower)
             sender = await event.get_sender()
+            try:
+                username = sender.username
+            except AttributeError:
+                username = "аноним"
+            
             chat = await event.get_chat()
             for keyword in keywords_lower:
                 if keyword in msg_lower:
                     blacklistkeyword_found = next((blacklistkeyword for blacklistkeyword in blacklistkeywords_lower if blacklistkeyword in msg_lower), None)
-                    await insert_messages([{'text': event.text, 'date': event.date, 'sender': sender.username}], 
-                                        chat.title, keyword, blacklistkeyword_found)
+                    await insert_messages([{'text': event.text, 'date': event.date, 'sender': username}], 
+                                        chat.title, keyword, blacklistkeyword_found, template_id)
                     if blacklistkeyword_found is None:
-                        await notify_users_for_listnere(bot, event, chat_id, sender.username, chat.title, keyword)
+                        await notify_users_for_listnere(self.bot, event, chat_id, username, chat.title, keyword)
                         print(f"[{chat.title}] {sender.first_name}: {event.text}")
                         logging.info(f"[{chat.title}] {sender.first_name}: {event.text}")
                         break
-                    
-    def create_groups_event_handler(self, groupIdArr, user_id, chat_id):
-        # if (self.stop_listening == False):
-        #     self.client.add_event_handler(lambda e: self.message_handler(e, user_id, chat_id, self.bot), events.NewMessage(chats=groupIdArr))
+
+    async def create_template_groups_event_handler(self, groupIdArr, chat_id, template_id):
         print("Попытка создать Экземпляр уже в функции")
         logging.info("Попытка создать Экземпляр уже в функции")
         try:   
-            if self.stop_listening is False:
+            if not self.stop_listening:
                 if self.mainHandler is None:
-                    self.mainHandler = lambda e: self.message_handler(e, user_id, chat_id, self.bot)
+                    self.mainHandler = lambda e: self.template_message_handler(e, chat_id, template_id)
+                    print(self.mainHandler)
                     self.client.add_event_handler(self.mainHandler, events.NewMessage(chats=groupIdArr))
                     print("Слушатель добавлен")
                     logging.info("Слушатель добавлен")
@@ -75,7 +74,7 @@ class GroupsEventHandler:
                     logging.info("Слушатель уже существует")
         except Exception as e:
             print(e)
-            logging.info(e)
+            logging.error(e)
 
     def remove_groups_event_handler(self):
         if self.mainHandler is not None:
@@ -93,61 +92,6 @@ class GroupsEventHandler:
 
     def start_handler(self):
         self.stop_listening = False
-
-# async def getMessagesTask(client, bot, curentGroup, user_id, task_uid, chat_id, groupArr):
-
-#     print(f"getMessagesTask started for group: {groupArr}")
-#     newMessagesList = []
-#     oldMessagesList = []
-#     while True:
-#         for group in groupArr:
-#             try:
-#                 print('Начала отработки группы')
-#                 curentGroup = await get_group_by_id(int(group['chat_id']), client)
-#                 print('Проверка группы на доступность')
-#                 if (curentGroup == 'Это приватный чат, или бота прогнали'):
-#                     print('Группа не прошла проверку')
-#                     await bot.send_message(chat_id=chat_id, text=f"Возможно бота прогнали из группы {group['chat_name']} {group['chat_id']}")
-#                     continue
-#                 print('Установка дат')
-#                 end_date = dt.now(pytz.utc)
-#                 start_date = dt.now(pytz.utc) - timedelta(hours=1)
-#                 print('Установка массивов сообщений')
-#                 oldMessagesList = newMessagesList
-#                 newMessagesList = await scanMessages(client, start_date, end_date, curentGroup, user_id)
-#                 newMessages = []
-#                 print(f'Отсканированна группа {curentGroup.title}')
-#                 print('Попытка сравнить сообщения')
-#                 if(oldMessagesList != []):
-#                     newMessages = compareResults(oldMessagesList, newMessagesList)
-#                     print('Произведено сравнение сообщений')
-#                 if (newMessages != []):
-#                     print('Оповещение поьзователей')
-#                     await insert_messages(newMessages, curentGroup.title)
-#                     await notify_users(bot, newMessages, chat_id)
-#                     print('Новые сообщения:')
-#                     print(newMessages)
-#                 print('Отработка группы завершена')
-#                 await asyncio.sleep(1)
-#             except Exception as e:
-#                 print(f'Ошибка: {e}')
-    # while True:
-    #     try:
-    #         end_date = dt.now(pytz.utc)
-    #         start_date = dt.now(pytz.utc) - timedelta(hours=1)
-    #         oldMessagesList = newMessagesList
-    #         newMessagesList = await scanMessages(client, start_date, end_date, curentGroup, user_id)
-    #         newMessages = []
-    #         if(oldMessagesList != []):
-    #             newMessages = compareResults(oldMessagesList, newMessagesList)
-    #         if (newMessages != []):
-    #             await insert_messages(newMessages, curentGroup.title)
-    #             await notify_users(bot, newMessages, chat_id)
-    #             print('Новые сообщения:')
-    #             print(newMessages)
-            
-    #     except Exception as e:
-    #         print(e)
 
 def compareResults(prevMessageArr, newMessagesArr):
     print('Начало сравнения')
@@ -197,7 +141,7 @@ async def joinGroupByLink(client, inviteLink, user_id, bot, chat_id):
     else:
         try:
             entity = await client.get_entity(inviteLink)
-            if (await is_member_of_group(client, entity.title)):
+            if (await is_member_of_group_title(client, entity.title)):
                 await bot.send_message(chat_id=chat_id, text=f"Бот уже является членом группы '{entity.title}'")
                 cur_group_list = await get_user_group_list(user_id)
                 if ((f"{entity.id}",f"{entity.title}",f"{user_id}") not in cur_group_list):
@@ -230,12 +174,53 @@ async def joinGroupByLink(client, inviteLink, user_id, bot, chat_id):
             print("---------------------Ошибка-----------------")
             await bot.send_message(chat_id=chat_id, text=f"Ошибка: {e.args}")
             print(e.args)
-            # await bot.send_message(chat_id=chat_id, text=f"Привышен лимит на присоединенние к группам, до нового присоединения осталось: {int(e.message.split(' ')[3]) + 1}")
             await asyncio.sleep(int(e.message.split(' ')[3]) + 1)
             
             return False
         
-async def is_member_of_group(client, group_title):
+async def joinGroupByLink_template(client, inviteLink, user_id, bot, chat_id, template_id):
+    if inviteLink == 'пропустить':
+        return 'skip'
+    else:
+        try:
+            entity = await client.get_entity(inviteLink)
+            if (await is_member_of_group_title(client, entity.title)):
+                await bot.send_message(chat_id=chat_id, text=f"Бот уже является членом группы '{entity.title}'")
+                cur_group_list = await get_user_group_list(user_id)
+                if ((f"{entity.id}",f"{entity.title}",f"{user_id}") not in cur_group_list):
+                    await add_group(entity.id, entity.title, user_id)
+                    print("Запись группы в бд")
+                return True
+            await asyncio.sleep(5)
+            print("-------Попытка присоединения--------")
+            if "t.me/+" in inviteLink:
+                # Обработка ссылок с хэшем (плюсом)
+                hash = inviteLink.split('/')[-1][1:]
+                group = await client(functions.messages.ImportChatInviteRequest(hash))
+                print("-----------Присоединился---------")
+            elif "t.me/" in inviteLink:
+                # Обработка ссылок без хэша (плюса)
+                username = inviteLink.split('/')[-1]
+                result = await client(functions.contacts.ResolveUsernameRequest(username))
+                group = await client(functions.channels.JoinChannelRequest(result.peer))
+                print("-----------Присоединился---------")
+            else:
+                # Некорректная ссылка
+                print("-----------Не присоединился------")
+                return False
+            print("---------------Id-ЧАТА------------------")
+            print(group.chats[0].id)
+            await add_group_template(group.chats[0].id, group.chats[0].title, user_id, template_id)
+            await bot.send_message(chat_id=chat_id, text=f"Присединился к группе {group.chats[0].title}, ожидайте")
+            return True
+        except Exception as e:
+            print("---------------------Ошибка-----------------")
+            await bot.send_message(chat_id=chat_id, text=f"Ошибка: {e.args}")
+            print(e.args)
+            await asyncio.sleep(int(e.message.split(' ')[3]) + 1)
+            return False
+        
+async def is_member_of_group_title(client, group_title):
         me = await client.get_me()
         dialogs = await client.get_dialogs()
         
@@ -247,7 +232,35 @@ async def is_member_of_group(client, group_title):
                 except UserNotParticipantError:
                     return False
         return False
+async def is_member_of_group_id(client, group_id):
+    me = await client.get_me()
+    try:
+        participant = await client(GetParticipantRequest(group_id, me))
+        if (isinstance(participant.participant, ChannelParticipantSelf)):
+            print("is member")
+        return isinstance(participant.participant, ChannelParticipantSelf)
+    except UserNotParticipantError:
+        print("not member")
+        return False
+    except Exception as e:
+        print(f"An error occurred while check participate: {str(e)}")
+        return False
     
+async def join_group_by_id(client, group_id):
+    try:
+        
+        if (not await is_member_of_group_id(client, group_id)):
+            await client(functions.channels.JoinChannelRequest(group_id))
+            print(f"Успешное присоединение к группе с id: {group_id}")
+            return True
+        
+    except FloodWaitError as e:
+        print(f"Got a flood wait error. Need to wait {e.seconds} seconds before trying again.")
+        return False
+    except Exception as e:
+        print(f"An error occurred while trying to join the group: {str(e)}")
+        return False
+
 
 async def getGroupList(client):
     groups=[]
@@ -268,39 +281,47 @@ def groupSelector(groupsArr):
     return target_groups
 
 async def search_group_not_joined(client, group_name):
-    await client.start()
-    # Поиск групп/каналов, содержащих ссылку на группу
-    search_results = await client(functions.contacts.SearchRequest(
-        q = group_name,
-        limit = 100
-    ))
-    # Фильтрация групп/каналов, в которых не состоит пользователь
-    not_joined_groups = []
-    me = await client.get_me()
-    
-    for chat in search_results.chats:
+    for _ in range(5):  # попробуйте соединиться 5 раз
         try:
-            if chat.broadcast:
-                continue
-        except:
-            continue
-        try:
-            participant = await client(GetParticipantRequest(chat, me))
-            if not isinstance(participant.participant, ChannelParticipantSelf):
-                not_joined_groups.append(chat)
-        except (UserNotParticipantError, ChannelPrivateError, ChatAdminRequiredError):
-            not_joined_groups.append(chat)
-        except Exception as e:
-            print(e)
+            # Поиск групп/каналов, содержащих название
+            search_results = await client(functions.contacts.SearchRequest(
+                q=group_name,
+                limit=100
+            ))
+            # Фильтрация групп/каналов, в которых не состоит пользователь
+            not_joined_groups = []
+            me = await client.get_me()
 
-    if not_joined_groups:
-        print("Группы, в которых вы не состоите:")
-        for group in not_joined_groups:
-            print(f"Название: {group.title}, ID: {group.id}")
-        return not_joined_groups
-    else:
-        print(f"Группы с именем {group_name}, в которых вы не состоите, не найдены.")
-        return None
+            for chat in search_results.chats:
+                try:
+                    if chat.broadcast:
+                        continue
+                except:
+                    continue
+                try:
+                    participant = await client(GetParticipantRequest(chat, me))
+                    if not isinstance(participant.participant, ChannelParticipantSelf):
+                        not_joined_groups.append(chat)
+                except (UserNotParticipantError, ChannelPrivateError, ChatAdminRequiredError):
+                    not_joined_groups.append(chat)
+                except Exception as e:
+                    print(e)
+
+            if not_joined_groups:
+                print("Группы, в которых вы не состоите:")
+                for group in not_joined_groups:
+                    print(f"Название: {group.title}, ID: {group.id}")
+                return not_joined_groups
+            else:
+                print(f"Группы с именем {group_name}, в которых вы не состоите, не найдены.")
+                return None
+
+        except sqlite3.OperationalError as e:
+            if 'database is locked' in str(e):
+                print("База данных заблокирована, попытка подключения номер", _+1)
+                time.sleep(5)
+            else:
+                raise e
 
 #Функция поиска группы по ee id
 async def get_group_by_id(group_id, client):
