@@ -1,0 +1,5 @@
+python-dotenv==1.0.0
+pytz==2022.7
+schedule==1.2.0
+Telethon==1.28.2
+aiogram
