@@ -74,7 +74,7 @@ class GroupsEventHandler:
             sender_blacklisted = username in blacklisted_senders
             # Если ключевое слово найдено в сообщении
             if keyword_found:
-                historyMessages = await fetch_messageById(sender_id, event.text)
+                historyMessages = await fetch_messages_by_sender_id(sender_id)
                 if all(isinstance(item, tuple) and len(item) >= 2 for item in historyMessages):
                     try:
                         sorted_history_messages = sorted(

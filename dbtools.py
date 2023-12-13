@@ -150,16 +150,16 @@ async def read_messages_from_db(time_range):
         return messages
 
 
-async def fetch_messageById(sender_id, text):
+async def fetch_messages_by_sender_id(sender_id):
     async with PoolConnection() as conn:
         try:
+            # Выбираем все сообщения пользователя с данным sender_id
             records = await conn.fetch("""
-                SELECT date, text FROM messages WHERE senderId = $1 AND text = $2
-            """, sender_id, text)
+                SELECT date, text FROM messages WHERE senderId = $1
+            """, sender_id)
 
             # Преобразовываем каждую запись в кортеж (date, text)
-            result = [(record["text"],
-                       record["date"]) for record in records]
+            result = [(record["text"], record["date"]) for record in records]
 
             return result
         except Exception as e:
