@@ -513,21 +513,33 @@ async def list_blacklisted_senders_handler_template(query: CallbackQuery, callba
 
     template_id = int(callback_data.get('template_id'))
 
-    # Предполагая, что у вас есть функция get_template_name_by_id
+    # Получение имени шаблона
     template_name = await get_template_name_by_id(template_id)
 
-    # Измените имя функции на соответствующую, которая получает отправителей из черного списка по template_id
+    # Получение списка заблокированных отправителей
     blacklisted_senders = await get_blacklisted_senders_by_template_id(template_id)
 
     if not blacklisted_senders:
         text = "В этом шаблоне нет отправителей из черного списка."
+        await query.message.edit_text(text)
     else:
         sender_list = "\n".join(blacklisted_senders)
-        text = f"Отправители в черном списке этого шаблона:\n{sender_list}"
+        full_text = f"Отправители в черном списке этого шаблона:\n{sender_list}"
 
-    back_markup = InlineKeyboardMarkup().add(InlineKeyboardButton("Назад",
-                                                                  callback_data=template_cd.new(template_id=template_id, action="edit_template_button")))
-    await query.message.edit_text(text, reply_markup=back_markup)
+        # Разбивка текста на части, если он превышает 4000 символов
+        max_length = 4000
+        parts = [full_text[i:i+max_length] for i in range(0, len(full_text), max_length)]
+
+        for i, part in enumerate(parts):
+            if i < len(parts) - 1:
+                # Отправка части текста без маркапа
+                await query.message.answer(part)
+            else:
+                # Для последней части добавляем маркап
+                back_markup = InlineKeyboardMarkup().add(InlineKeyboardButton("Назад",
+                                                                              callback_data=template_cd.new(template_id=template_id, action="edit_template_button")))
+                await query.message.answer(part, reply_markup=back_markup)
+
 
 # #Добавление ключевых слов
 # @dp.callback_query_handler(template_cd.filter(action="add_keywords_to_tamplate"))
@@ -600,7 +612,7 @@ async def add_senders_to_blacklist_msg(msg: types.Message, user_data, bot, **kwa
     template_id = user_data[msg.from_user.id]["edit_template"]
     template_name = await get_template_name_by_id(template_id)
 
-    senders = msg.text.split(', ')
+    senders = msg.text.replace('\n','').split(', ')
     user_id = list(user_data.keys())[0]
 
     added_senders = []
@@ -655,7 +667,7 @@ async def add_blacklistkeywords_to_tamplate(msg: types.Message, user_data, bot, 
 
     for keyword in keywords:
         keyword = keyword.strip()
-        if await add_blacklistkeyword_to_tamplate(user_id, keyword, template_id):
+        if await add_blacklistkeyword_to_tamplate(user_id, keyword, int(template_id)):
             added_keywords.append(keyword)
         else:
             failed_keywords.append(keyword)
