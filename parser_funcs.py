@@ -74,22 +74,34 @@ class GroupsEventHandler:
             sender_blacklisted = username in blacklisted_senders
             # Если ключевое слово найдено в сообщении
             if keyword_found:
-                historyMessages = await fetch_messages_by_sender_id(sender_id)
+                # Изменено: Теперь функция возвращает также текст сообщения
+                historyMessages = await fetch_messages_by_sender_id(sender_id) 
                 if all(isinstance(item, tuple) and len(item) >= 2 for item in historyMessages):
                     try:
-                        sorted_history_messages = sorted(
-                            historyMessages, key=lambda x: parse(x[1]), reverse=True)
+                        # Сортировка по дате
+                        sorted_history_messages = sorted(historyMessages, key=lambda x: parse(x[1]), reverse=True)
                     except Exception as e:
                         print(f"Ошибка при сортировке сообщений: {e}")
                         return
                     if sorted_history_messages:
-                        latest_message_date_str = sorted_history_messages[0][1]
+                        latest_message = sorted_history_messages[0]
+                        latest_message_date_str = latest_message[1]
+                        latest_message_text = latest_message[0] # Добавлено: текст последнего сообщения
                         latest_message_date = parse(latest_message_date_str)
                         current_message_date = parse(event.date)
-                        if (current_message_date - latest_message_date) < timedelta(hours=24):
+                        # print('current_message_date', current_message_date)
+                        # print('latest_message_date', latest_message_date)
+                        # print('event.text', event.text)
+                        # print('latest_message_text', latest_message_text)
+                        print('current_message_date - latest_message_date', current_message_date - latest_message_date)
+                        print('timedelta(hours=24)', timedelta(hours=24))
+                        print((current_message_date - latest_message_date) < timedelta(hours=24) or event.text == latest_message_text)
+                        # Добавлено: Проверка на совпадение текста сообщения
+                        if (current_message_date - latest_message_date) < timedelta(hours=24) or event.text == latest_message_text:
                             return
+                # Остальная часть кода без изменений
                 await insert_messages([{'text': event.text, 'date': str(event.date), 'sender': username}],
-                                      chat.title, keyword_found, blacklistkeyword_found if not sender_blacklisted else username, template_id, sender_id)
+                                    chat.title, keyword_found, blacklistkeyword_found if not sender_blacklisted else username, template_id, sender_id)
 
                 # Если нет слова-исключения и отправителя в черном списке
                 if blacklistkeyword_found is None and not sender_blacklisted:

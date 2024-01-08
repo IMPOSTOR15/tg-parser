@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import pytz
 from dotenv import load_dotenv
 import asyncio
+import traceback
 
 load_dotenv()
 
@@ -186,14 +187,15 @@ async def add_keyword_to_tamplate(user_id: int, keyword: str, template_id: int) 
             return False
 
 
-async def add_sender_to_blacklist(user_id: int, sender_name: str, template_id: int) -> bool:
+async def add_sender_to_blacklist(user_id: int, sender_name: str, template_id: int):
     async with PoolConnection() as conn:
         try:
             await conn.execute("INSERT INTO blacklist_senders (user_id, sender_name, template_id) VALUES ($1, $2, $3)", user_id, sender_name, template_id)
             return True
         except Exception as e:
+            traceback_text = traceback.format_exc()
             print(f"Failed to add sender to blacklist. Error: {e}")
-            return False
+            return traceback_text
 
 
 # Получение из бд ключевых слов конкретного пользователя

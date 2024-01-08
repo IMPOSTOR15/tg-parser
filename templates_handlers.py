@@ -617,10 +617,15 @@ async def add_senders_to_blacklist_msg(msg: types.Message, user_data, bot, **kwa
 
     added_senders = []
     failed_senders = []
+    if not template_id:
+        template_id = 1
 
     for sender in senders:
         sender = sender.strip()
-        if await add_sender_to_blacklist(user_id, sender, template_id):
+        result = await add_sender_to_blacklist(user_id, sender, int(template_id))
+        if isinstance(result, str):
+            await bot.send_message(msg.chat.id, result)
+        elif result:
             added_senders.append(sender)
         else:
             failed_senders.append(sender)
